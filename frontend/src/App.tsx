@@ -1,16 +1,17 @@
 import { useState } from 'react';
-import { 
-  Bell, User, LayoutDashboard, ShoppingCart, 
-  Package, Map, BarChart2, LogOut, ChevronDown 
+import {
+  Bell, User, LayoutDashboard, ShoppingCart,
+  Package, Map, BarChart2, LogOut, ChevronDown
 } from 'lucide-react';
 
 import Purchases from './pages/Purchases';
 import InventoryPage from './pages/Inventory';
 import Fields from './pages/Fields';             // НОВЕ
 import Applications from './pages/Applications'; // НОВЕ
+import Analytics from './pages/Analytics'; // НОВЕ
 
 // Тип для всіх можливих сторінок
-type PageType = 'purchases' | 'inventory' | 'fields' | 'applications';
+type PageType = 'purchases' | 'inventory' | 'fields' | 'applications' | 'analytics'; // Додано 'analytics'
 
 function App() {
   const [activePage, setActivePage] = useState<PageType>('purchases');
@@ -22,13 +23,14 @@ function App() {
       case 'inventory': return 'Склад';
       case 'fields': return 'Поля';
       case 'applications': return 'Журнал використання';
+      case 'analytics': return 'Аналітика';
       default: return 'АІС "Агрохімія"';
     }
   };
 
   return (
     <div className="flex h-screen bg-gray-100 font-sans text-gray-800">
-      
+
       <aside className="w-64 bg-agro-dark text-white flex flex-col shadow-lg z-10">
         <div className="h-16 flex items-center px-6 border-b border-white/10 font-bold text-lg gap-2">
           <div className="w-8 h-8 bg-white/20 rounded flex items-center justify-center">💧</div>
@@ -38,7 +40,7 @@ function App() {
           <button className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors w-full text-left">
             <LayoutDashboard size={20} /> Дашборд
           </button>
-          
+
           <button onClick={() => setActivePage('purchases')} className={`flex items-center gap-3 px-3 py-2.5 rounded transition-colors w-full text-left ${activePage === 'purchases' ? 'bg-agro-light text-white font-medium shadow-sm' : 'hover:bg-white/10'}`}>
             <ShoppingCart size={20} /> Закупівлі
           </button>
@@ -57,7 +59,7 @@ function App() {
             <Map size={20} /> Поля
           </button>
 
-          <button className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors w-full text-left">
+          <button onClick={() => setActivePage('analytics')} className={`flex items-center gap-3 px-3 py-2.5 rounded transition-colors w-full text-left ${activePage === 'analytics' ? 'bg-agro-light text-white font-medium shadow-sm' : 'hover:bg-white/10'}`}>
             <BarChart2 size={20} /> Аналітика
           </button>
         </nav>
@@ -89,6 +91,7 @@ function App() {
         {activePage === 'inventory' && <InventoryPage />}
         {activePage === 'fields' && <Fields />}
         {activePage === 'applications' && <Applications />}
+        {activePage === 'analytics' && <Analytics />}
       </main>
     </div>
   );
