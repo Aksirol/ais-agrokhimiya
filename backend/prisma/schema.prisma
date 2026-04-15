@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 Int                 @id @default(autoincrement())
+  name               String
+  email              String              @unique
+  role               String
+  purchaseOrders     PurchaseOrder[]
+  applications       Application[]
+  inventoryMovements InventoryMovement[]
+}
+
+model Supplier {
+  id             Int             @id @default(autoincrement())
+  name           String
+  contact        String?
+  address        String?
+  purchaseOrders PurchaseOrder[]
+}
+
+model Warehouse {
+  id           Int           @id @default(autoincrement())
+  name         String
+  zone         String?
+  description  String?
+  inventories  Inventory[]
+  applications Application[]
+}
+
+model Chemical {
+  id            Int           @id @default(autoincrement())
+  name          String
+  category      String
+  base_unit     String
+  purchase_unit String
+  unit_factor   Decimal
+  hazard_class  String?
+  orderItems    OrderItem[]
+  inventories   Inventory[]
+  applications  Application[]
+}
+
+model Field {
+  id           Int           @id @default(autoincrement())
+  name         String
+  area_ha      Decimal
+  crop_type    String
+  location     String?
+  season       String?
+  applications Application[]
+}
+
+model PurchaseOrder {
+  id                 Int                 @id @default(autoincrement())
+  supplier_id        Int
+  user_id            Int
+  order_date         DateTime            @default(now())
+  total_amount       Decimal
+  status             String              // Наприклад: "Замовлено", "Отримано", "Скасовано"
+  is_locked          Boolean             @default(false)
+  
+  supplier           Supplier            @relation(fields: [supplier_id], references: [id])
+  user               User                @relation(fields: [user_id], references: [id])
+  orderItems         OrderItem[]
+  inventoryMovements InventoryMovement[] @relation("OrderMovements")
+}
+
+model OrderItem {
+  id             Int           @id @default(autoincrement())
+  order_id       Int
+  chemical_id    Int
+  quantity       Decimal
+  purchase_unit  String
+  price_per_unit Decimal
+  
+  order          PurchaseOrder @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  chemical       Chemical      @relation(fields: [chemical_id], references: [id])
+}
+
+model Inventory {
+  id            Int                 @id @default(autoincrement())
+  chemical_id   Int
+  warehouse_id  Int
+  quantity      Decimal
+  min_threshold Decimal             @default(0)
+  last_updated  DateTime            @updatedAt
+  
+  chemical      Chemical            @relation(fields: [chemical_id], references: [id])
+  warehouse     Warehouse           @relation(fields: [warehouse_id], references: [id])
+  movements     InventoryMovement[]
+}
+
+model InventoryMovement {
+  id                    Int      @id @default(autoincrement())
+  inventory_id          Int
+  type                  String   // Наприклад: "IN" (прихід), "OUT" (витрата)
+  quantity              Decimal
+  source_order_id       Int?
+  source_application_id Int?
+  moved_at              DateTime @default(now())
+  user_id               Int
+  
+  inventory             Inventory      @relation(fields: [inventory_id], references: [id])
+  user                  User           @relation(fields: [user_id], references: [id])
+  sourceOrder           PurchaseOrder? @relation("OrderMovements", fields: [source_order_id], references: [id])
+  sourceApplication     Application?   @relation("AppMovements", fields: [source_application_id], references: [id])
+}
+
+model Application {
+  id                 Int                 @id @default(autoincrement())
+  chemical_id        Int
+  field_id           Int
+  user_id            Int
+  warehouse_id       Int
+  applied_date       DateTime            @default(now())
+  quantity_used      Decimal
+  base_unit          String
+  norm_per_ha        Decimal
+  purpose            String?
+  
+  chemical           Chemical            @relation(fields: [chemical_id], references: [id])
+  field              Field               @relation(fields: [field_id], references: [id])
+  user               User                @relation(fields: [user_id], references: [id])
+  warehouse          Warehouse           @relation(fields: [warehouse_id], references: [id])
+  inventoryMovements InventoryMovement[] @relation("AppMovements")
+}
