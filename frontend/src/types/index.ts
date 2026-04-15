@@ -41,3 +41,29 @@ export interface Inventory {
   chemical: Chemical;
   warehouse: Warehouse;
 }
+
+export interface Field {
+  id: number;
+  name: string;
+  area_ha: string;
+  crop_type: string;
+  location: string | null;
+  season: string | null;
+}
+
+export interface Application {
+  id: number;
+  chemical_id: number;
+  field_id: number;
+  user_id: number;
+  warehouse_id: number;
+  applied_date: string;
+  quantity_used: string;
+  base_unit: string;
+  norm_per_ha: string;
+  purpose: string | null;
+  chemical: Chemical;
+  field: Field;
+  user: { id: number; name: string; }; // Спрощений тип користувача
+  warehouse: Warehouse;
+}

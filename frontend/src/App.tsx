@@ -4,18 +4,31 @@ import {
   Package, Map, BarChart2, LogOut, ChevronDown 
 } from 'lucide-react';
 
-// Імпортуємо наші сторінки
 import Purchases from './pages/Purchases';
 import InventoryPage from './pages/Inventory';
+import Fields from './pages/Fields';             // НОВЕ
+import Applications from './pages/Applications'; // НОВЕ
+
+// Тип для всіх можливих сторінок
+type PageType = 'purchases' | 'inventory' | 'fields' | 'applications';
 
 function App() {
-  // Стан для відстеження активної сторінки
-  const [activePage, setActivePage] = useState<'purchases' | 'inventory'>('purchases');
+  const [activePage, setActivePage] = useState<PageType>('purchases');
+
+  // Допоміжна функція для заголовка
+  const getPageTitle = () => {
+    switch (activePage) {
+      case 'purchases': return 'Закупівлі';
+      case 'inventory': return 'Склад';
+      case 'fields': return 'Поля';
+      case 'applications': return 'Журнал використання';
+      default: return 'АІС "Агрохімія"';
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-100 font-sans text-gray-800">
       
-      {/* Бокове меню (Sidebar) */}
       <aside className="w-64 bg-agro-dark text-white flex flex-col shadow-lg z-10">
         <div className="h-16 flex items-center px-6 border-b border-white/10 font-bold text-lg gap-2">
           <div className="w-8 h-8 bg-white/20 rounded flex items-center justify-center">💧</div>
@@ -26,28 +39,24 @@ function App() {
             <LayoutDashboard size={20} /> Дашборд
           </button>
           
-          {/* Кнопка "Закупівлі" */}
-          <button 
-            onClick={() => setActivePage('purchases')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded transition-colors w-full text-left ${activePage === 'purchases' ? 'bg-agro-light text-white font-medium shadow-sm' : 'hover:bg-white/10'}`}
-          >
+          <button onClick={() => setActivePage('purchases')} className={`flex items-center gap-3 px-3 py-2.5 rounded transition-colors w-full text-left ${activePage === 'purchases' ? 'bg-agro-light text-white font-medium shadow-sm' : 'hover:bg-white/10'}`}>
             <ShoppingCart size={20} /> Закупівлі
           </button>
 
-          {/* Кнопка "Склад" */}
-          <button 
-            onClick={() => setActivePage('inventory')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded transition-colors w-full text-left ${activePage === 'inventory' ? 'bg-agro-light text-white font-medium shadow-sm' : 'hover:bg-white/10'}`}
-          >
+          <button onClick={() => setActivePage('inventory')} className={`flex items-center gap-3 px-3 py-2.5 rounded transition-colors w-full text-left ${activePage === 'inventory' ? 'bg-agro-light text-white font-medium shadow-sm' : 'hover:bg-white/10'}`}>
             <Package size={20} /> Склад
           </button>
 
-          <button className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors w-full text-left">
+          {/* Кнопка "Використання" */}
+          <button onClick={() => setActivePage('applications')} className={`flex items-center gap-3 px-3 py-2.5 rounded transition-colors w-full text-left ${activePage === 'applications' ? 'bg-agro-light text-white font-medium shadow-sm' : 'hover:bg-white/10'}`}>
             <div className="w-5 h-5 flex items-center justify-center">🌱</div> Використання
           </button>
-          <button className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors w-full text-left">
+
+          {/* Кнопка "Поля" */}
+          <button onClick={() => setActivePage('fields')} className={`flex items-center gap-3 px-3 py-2.5 rounded transition-colors w-full text-left ${activePage === 'fields' ? 'bg-agro-light text-white font-medium shadow-sm' : 'hover:bg-white/10'}`}>
             <Map size={20} /> Поля
           </button>
+
           <button className="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-white/10 transition-colors w-full text-left">
             <BarChart2 size={20} /> Аналітика
           </button>
@@ -59,13 +68,10 @@ function App() {
         </div>
       </aside>
 
-      {/* Основний контент */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        
-        {/* Верхня панель (Navbar) */}
         <header className="h-16 bg-white border-b flex items-center justify-between px-6 flex-shrink-0">
           <div className="font-semibold text-xl text-gray-800">
-            {activePage === 'purchases' ? 'Закупівлі' : 'Склад'}
+            {getPageTitle()}
           </div>
           <div className="flex items-center gap-6">
             <Bell className="text-gray-500 hover:text-gray-800 cursor-pointer" size={20} />
@@ -79,10 +85,10 @@ function App() {
           </div>
         </header>
 
-        {/* Динамічний рендер сторінок */}
         {activePage === 'purchases' && <Purchases />}
         {activePage === 'inventory' && <InventoryPage />}
-
+        {activePage === 'fields' && <Fields />}
+        {activePage === 'applications' && <Applications />}
       </main>
     </div>
   );
