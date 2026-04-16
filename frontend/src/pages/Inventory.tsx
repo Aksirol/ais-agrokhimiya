@@ -1,22 +1,116 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import { format } from 'date-fns';
+
+// Додаємо типи для списків у формі
+interface ChemicalData { id: number; name: string; base_unit: string; category: string; }
+interface WarehouseData { id: number; name: string; zone: string; }
 
 export default function InventoryPage() {
+  const [items, setItems] = useState<any[]>([]);
+  const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  
+  // Дані для модального вікна
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [chemicals, setChemicals] = useState<ChemicalData[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseData[]>([]);
+  
+  const [formData, setFormData] = useState({
+    id: 0, chemical_id: '', warehouse_id: '', quantity: '', min_threshold: ''
+  });
+
+  // Перевірка прав поточного користувача
+  const currentUser = JSON.parse(localStorage.getItem('agro_user') || '{}');
+  const canEdit = currentUser.role === 'admin' || currentUser.role === 'operator';
+  const canDelete = currentUser.role === 'admin';
+
+  const fetchData = async () => {
+    try {
+      const response = await axios.get('/api/inventory');
+      setItems(response.data);
+      if (response.data.length > 0 && !selectedItem) {
+        setSelectedItem(response.data[0]);
+      }
+    } catch (error) {
+      console.error('Помилка завантаження складу:', error);
+    }
+  };
+
+  const fetchFormData = async () => {
+    try {
+      const response = await axios.get('/api/inventory/form-data');
+      setChemicals(response.data.chemicals);
+      setWarehouses(response.data.warehouses);
+    } catch (error) {
+      console.error('Помилка завантаження опцій форми:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    if (canEdit) fetchFormData();
+  }, [canEdit]);
+
+  // Відкриття модалки
+  const handleAddNew = () => {
+    setFormData({ id: 0, chemical_id: '', warehouse_id: '', quantity: '', min_threshold: '' });
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (item: any) => {
+    setFormData({ 
+      id: item.id, 
+      chemical_id: String(item.chemical_id), 
+      warehouse_id: String(item.warehouse_id), 
+      quantity: String(item.quantity), 
+      min_threshold: String(item.min_threshold) 
+    });
+    setIsModalOpen(true);
+  };
+
+  // Збереження
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (formData.id === 0) {
+        await axios.post('/api/inventory', formData);
+      } else {
+        await axios.put(`/api/inventory/${formData.id}`, formData);
+      }
+      setIsModalOpen(false);
+      fetchData();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Помилка збереження');
+    }
+  };
+
+  // Видалення
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Видалити цю позицію зі складу?')) return;
+    try {
+      await axios.delete(`/api/inventory/${id}`);
+      setSelectedItem(null);
+      fetchData();
+    } catch (error) {
+      alert('Помилка видалення');
+    }
+  };
+
+  // Допоміжна функція для розрахунку статусу та прогрес-бару
+  const getStatus = (qty: number, min: number) => {
+    if (qty <= min) return { label: 'Критично', colorClass: 'bg-[#fce8e8] text-[#8a1a1a]', barColor: 'bg-[#e24b4a]' };
+    if (qty <= min * 1.5) return { label: 'Мало', colorClass: 'bg-[#fde8c0] text-[#7a4a10]', barColor: 'bg-[#ef9f27]' };
+    return { label: 'Норма', colorClass: 'bg-[#d1f0e0] text-[#1e5c36]', barColor: 'bg-[#2d7a50]' };
+  };
+
   return (
-    <div className="flex-1 overflow-auto p-5 bg-[#f5f5f2]">
+    <div className="flex-1 overflow-auto p-5 bg-[#f5f5f2] relative">
       <div className="text-[20px] font-medium text-[#1a1a18] mb-4">Склад</div>
       
       {/* Фільтри */}
       <div className="flex gap-2.5 mb-3.5 items-center">
         <select className="h-[34px] border border-[#d0d0cc] rounded-[8px] px-2.5 text-[13px] bg-white text-gray-800 focus:outline-none focus:border-[#2d7a50]">
           <option>Всі категорії</option>
-          <option>Добрива</option>
-          <option>Гербіциди</option>
-          <option>Фунгіциди</option>
-        </select>
-        <select className="h-[34px] border border-[#d0d0cc] rounded-[8px] px-2.5 text-[13px] bg-white text-gray-800 focus:outline-none focus:border-[#2d7a50]">
-          <option>Всі зони</option>
-          <option>Зона А</option>
-          <option>Зона Б</option>
         </select>
         <button className="h-[34px] px-4 bg-[#2d7a50] text-white border-none rounded-[8px] text-[13px] font-medium hover:bg-opacity-90 transition-colors">
           Фільтр
@@ -38,85 +132,48 @@ export default function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              <tr className="bg-[#edf7f2] hover:bg-[#edf7f2] cursor-pointer transition-colors group">
-                <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] group-last:border-none">Нітроамофоска</td>
-                <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2] group-last:border-none">Добриво</td>
-                <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] group-last:border-none">
-                  <div>45 кг</div>
-                  <div className="h-[6px] bg-[#f0f0ee] rounded-[3px] overflow-hidden mt-1">
-                    <div className="h-[6px] rounded-[3px] bg-[#e24b4a]" style={{ width: '15%' }}></div>
-                  </div>
-                </td>
-                <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2] group-last:border-none">Зона А</td>
-                <td className="py-2.5 px-3 text-[13px] border-b border-[#f4f4f2] group-last:border-none">
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-[#fce8e8] text-[#8a1a1a]">Критично</span>
-                </td>
-              </tr>
-              <tr className="hover:bg-[#fafaf8] cursor-pointer transition-colors group">
-                <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] group-last:border-none">Гербіцид «Ураган»</td>
-                <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2] group-last:border-none">Гербіцид</td>
-                <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] group-last:border-none">
-                  <div>8 л</div>
-                  <div className="h-[6px] bg-[#f0f0ee] rounded-[3px] overflow-hidden mt-1">
-                    <div className="h-[6px] rounded-[3px] bg-[#ef9f27]" style={{ width: '40%' }}></div>
-                  </div>
-                </td>
-                <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2] group-last:border-none">Зона Б</td>
-                <td className="py-2.5 px-3 text-[13px] border-b border-[#f4f4f2] group-last:border-none">
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-[#fde8c0] text-[#7a4a10]">Мало</span>
-                </td>
-              </tr>
-              <tr className="hover:bg-[#fafaf8] cursor-pointer transition-colors group">
-                <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] group-last:border-none">Карбамід</td>
-                <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2] group-last:border-none">Добриво</td>
-                <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] group-last:border-none">
-                  <div>320 кг</div>
-                  <div className="h-[6px] bg-[#f0f0ee] rounded-[3px] overflow-hidden mt-1">
-                    <div className="h-[6px] rounded-[3px] bg-[#2d7a50]" style={{ width: '72%' }}></div>
-                  </div>
-                </td>
-                <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2] group-last:border-none">Зона А</td>
-                <td className="py-2.5 px-3 text-[13px] border-b border-[#f4f4f2] group-last:border-none">
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-[#d1f0e0] text-[#1e5c36]">Норма</span>
-                </td>
-              </tr>
-              <tr className="hover:bg-[#fafaf8] cursor-pointer transition-colors group">
-                <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] group-last:border-none">Фунгіцид «Амістар»</td>
-                <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2] group-last:border-none">Фунгіцид</td>
-                <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] group-last:border-none">
-                  <div>24 л</div>
-                  <div className="h-[6px] bg-[#f0f0ee] rounded-[3px] overflow-hidden mt-1">
-                    <div className="h-[6px] rounded-[3px] bg-[#2d7a50]" style={{ width: '60%' }}></div>
-                  </div>
-                </td>
-                <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2] group-last:border-none">Зона Б</td>
-                <td className="py-2.5 px-3 text-[13px] border-b border-[#f4f4f2] group-last:border-none">
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-[#d1f0e0] text-[#1e5c36]">Норма</span>
-                </td>
-              </tr>
-              <tr className="hover:bg-[#fafaf8] cursor-pointer transition-colors group">
-                <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] group-last:border-none">Суперфосфат</td>
-                <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2] group-last:border-none">Добриво</td>
-                <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] group-last:border-none">
-                  <div>90 кг</div>
-                  <div className="h-[6px] bg-[#f0f0ee] rounded-[3px] overflow-hidden mt-1">
-                    <div className="h-[6px] rounded-[3px] bg-[#ef9f27]" style={{ width: '30%' }}></div>
-                  </div>
-                </td>
-                <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2] group-last:border-none">Зона А</td>
-                <td className="py-2.5 px-3 text-[13px] border-b border-[#f4f4f2] group-last:border-none">
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap bg-[#fde8c0] text-[#7a4a10]">Мало</span>
-                </td>
-              </tr>
+              {items.map(item => {
+                const qty = Number(item.quantity);
+                const min = Number(item.min_threshold);
+                const status = getStatus(qty, min);
+                // Простий розрахунок відсотка для прогрес-бару (максимум беремо як 3 * min)
+                const percent = Math.min(100, Math.max(5, (qty / (min * 3)) * 100));
+
+                return (
+                  <tr 
+                    key={item.id} 
+                    onClick={() => setSelectedItem(item)}
+                    className={`cursor-pointer transition-colors group ${selectedItem?.id === item.id ? 'bg-[#edf7f2]' : 'hover:bg-[#fafaf8]'}`}
+                  >
+                    <td className="py-2.5 px-3 text-[13px] font-medium text-[#1a1a18] border-b border-[#f4f4f2]">{item.chemical.name}</td>
+                    <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2]">{item.chemical.category}</td>
+                    <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2]">
+                      <div>{qty} {item.chemical.base_unit}</div>
+                      <div className="h-[6px] bg-[#f0f0ee] rounded-[3px] overflow-hidden mt-1">
+                        <div className={`h-[6px] rounded-[3px] ${status.barColor}`} style={{ width: `${percent}%` }}></div>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2]">{item.warehouse.name}</td>
+                    <td className="py-2.5 px-3 text-[13px] border-b border-[#f4f4f2]">
+                      <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${status.colorClass}`}>
+                        {status.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {items.length === 0 && (
+                <tr><td colSpan={5} className="text-center py-6 text-gray-500">Склад порожній</td></tr>
+              )}
             </tbody>
           </table>
+          
           <div className="flex gap-2 p-2.5 border-t border-[#e0e0db] mt-auto">
-            <button className="h-[32px] px-3.5 bg-[#2d7a50] text-white border-none rounded-[7px] text-[13px] font-medium hover:bg-opacity-90 transition-colors">
-              + Додати
-            </button>
-            <button className="h-[32px] px-3.5 bg-white text-[#1a1a18] border border-[#d0d0cc] rounded-[7px] text-[13px] hover:bg-gray-50 transition-colors">
-              Редагувати
-            </button>
+            {canEdit && (
+              <button onClick={handleAddNew} className="h-[32px] px-3.5 bg-[#2d7a50] text-white border-none rounded-[7px] text-[13px] font-medium hover:bg-opacity-90">
+                + Додати позицію
+              </button>
+            )}
           </div>
         </div>
 
@@ -125,52 +182,114 @@ export default function InventoryPage() {
           <div className="text-[13px] font-medium text-[#1a1a18] mb-3 pb-2 border-b border-[#f0f0ee]">
             Деталі позиції
           </div>
-          <div className="flex justify-between mb-2">
-            <span className="text-[12px] text-[#888]">Назва</span>
-            <span className="text-[12px] font-medium text-[#1a1a18] text-right">Нітроамофоска</span>
-          </div>
-          <div className="flex justify-between mb-2">
-            <span className="text-[12px] text-[#888]">Категорія</span>
-            <span className="text-[12px] font-medium text-[#1a1a18] text-right">Добриво</span>
-          </div>
-          <div className="flex justify-between mb-2">
-            <span className="text-[12px] text-[#888]">Залишок</span>
-            <span className="text-[12px] font-medium text-[#c0392b] text-right">45 кг</span>
-          </div>
-          <div className="flex justify-between mb-2">
-            <span className="text-[12px] text-[#888]">Мін. поріг</span>
-            <span className="text-[12px] font-medium text-[#1a1a18] text-right">100 кг</span>
-          </div>
-          <div className="flex justify-between mb-2">
-            <span className="text-[12px] text-[#888]">Зона</span>
-            <span className="text-[12px] font-medium text-[#1a1a18] text-right">Зона А</span>
-          </div>
-          <div className="flex justify-between mb-2">
-            <span className="text-[12px] text-[#888]">Оновлено</span>
-            <span className="text-[12px] font-medium text-[#1a1a18] text-right">12.03.2024</span>
-          </div>
           
-          <div className="text-[11px] text-[#888] font-medium mt-3 mb-1.5 uppercase tracking-wide">
-            Останній рух
-          </div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="text-[12px] text-[#2d7a50] font-bold">↓</span>
-            <span className="text-[12px] text-[#555] flex-1 truncate">Надходження +500 кг</span>
-            <span className="text-[11px] text-[#bbb]">12.03</span>
-          </div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="text-[12px] text-[#c0392b] font-bold">↑</span>
-            <span className="text-[12px] text-[#555] flex-1 truncate">Витрата −455 кг</span>
-            <span className="text-[11px] text-[#bbb]">18.03</span>
-          </div>
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <span className="text-[12px] text-[#c0392b] font-bold">↑</span>
-            <span className="text-[12px] text-[#555] flex-1 truncate">Витрата −0 кг</span>
-            <span className="text-[11px] text-[#bbb]">22.03</span>
+          {selectedItem ? (
+            <>
+              <div className="flex justify-between mb-2">
+                <span className="text-[12px] text-[#888]">Назва</span>
+                <span className="text-[12px] font-medium text-[#1a1a18] text-right truncate w-24">{selectedItem.chemical.name}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-[12px] text-[#888]">Категорія</span>
+                <span className="text-[12px] font-medium text-[#1a1a18] text-right">{selectedItem.chemical.category}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-[12px] text-[#888]">Залишок</span>
+                <span className="text-[12px] font-bold text-[#2d7a50] text-right">{Number(selectedItem.quantity)} {selectedItem.chemical.base_unit}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-[12px] text-[#888]">Мін. поріг</span>
+                <span className="text-[12px] font-medium text-[#1a1a18] text-right">{Number(selectedItem.min_threshold)} {selectedItem.chemical.base_unit}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-[12px] text-[#888]">Склад</span>
+                <span className="text-[12px] font-medium text-[#1a1a18] text-right">{selectedItem.warehouse.name}</span>
+              </div>
+              <div className="flex justify-between mb-2">
+                <span className="text-[12px] text-[#888]">Оновлено</span>
+                <span className="text-[12px] font-medium text-[#1a1a18] text-right">
+                  {format(new Date(selectedItem.last_updated), 'dd.MM.yyyy')}
+                </span>
+              </div>
+
+              {canEdit && (
+                <div className="mt-4 flex flex-col gap-2 pt-3 border-t border-[#f0f0ee]">
+                  <button onClick={() => handleEdit(selectedItem)} className="w-full h-[30px] border border-[#d0d0cc] bg-white text-[#1a1a18] rounded-[7px] text-[12px] font-medium hover:bg-gray-50">
+                    Редагувати залишок
+                  </button>
+                  {canDelete && (
+                    <button onClick={() => handleDelete(selectedItem.id)} className="w-full h-[30px] bg-[#fce8e8] text-[#c0392b] border-none rounded-[7px] text-[12px] font-medium hover:bg-red-200">
+                      Видалити зі складу
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-[12px] text-gray-500 text-center py-6">Оберіть позицію</div>
+          )}
+        </div>
+      </div>
+
+      {/* Модальне вікно (Створення / Редагування) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-[10px] w-[400px] shadow-lg overflow-hidden">
+            <div className="px-5 py-4 border-b border-[#e0e0db] flex justify-between items-center bg-[#f8f8f6]">
+              <h3 className="font-medium text-[15px]">{formData.id ? 'Редагувати залишок' : 'Додати на склад'}</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-700 text-lg leading-none">&times;</button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+              
+              {/* Якщо редагуємо, хімікат і склад змінити не можна */}
+              <div>
+                <label className="block text-[12px] text-[#666] mb-1">Хімікат *</label>
+                <select 
+                  required 
+                  disabled={formData.id !== 0}
+                  value={formData.chemical_id} 
+                  onChange={e => setFormData({...formData, chemical_id: e.target.value})} 
+                  className="w-full px-3 py-2 border rounded-md text-[13px] bg-white disabled:bg-gray-100 focus:outline-none focus:border-[#2d7a50]"
+                >
+                  <option value="" disabled>Оберіть хімікат...</option>
+                  {chemicals.map(c => <option key={c.id} value={c.id}>{c.name} ({c.category})</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[12px] text-[#666] mb-1">Склад *</label>
+                <select 
+                  required 
+                  disabled={formData.id !== 0}
+                  value={formData.warehouse_id} 
+                  onChange={e => setFormData({...formData, warehouse_id: e.target.value})} 
+                  className="w-full px-3 py-2 border rounded-md text-[13px] bg-white disabled:bg-gray-100 focus:outline-none focus:border-[#2d7a50]"
+                >
+                  <option value="" disabled>Оберіть приміщення...</option>
+                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.name} {w.zone ? `(${w.zone})` : ''}</option>)}
+                </select>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[12px] text-[#666] mb-1">Залишок *</label>
+                  <input required type="number" step="0.1" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} className="w-full px-3 py-2 border rounded-md text-[13px] focus:outline-none focus:border-[#2d7a50]" />
+                </div>
+                <div>
+                  <label className="block text-[12px] text-[#666] mb-1">Мін. поріг *</label>
+                  <input required type="number" step="0.1" value={formData.min_threshold} onChange={e => setFormData({...formData, min_threshold: e.target.value})} className="w-full px-3 py-2 border rounded-md text-[13px] focus:outline-none focus:border-[#2d7a50]" />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-2 pt-4 border-t border-[#e0e0db]">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border rounded-md text-[13px] hover:bg-gray-50">Скасувати</button>
+                <button type="submit" className="px-4 py-2 bg-[#2d7a50] text-white rounded-md text-[13px] hover:bg-opacity-90">Зберегти</button>
+              </div>
+            </form>
           </div>
         </div>
-
-      </div>
+      )}
     </div>
   );
 }
