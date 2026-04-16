@@ -77,12 +77,73 @@ router.put('/:id/status', authorizeRoles('admin', 'operator'), async (req, res) 
       return res.status(403).json({ error: 'Оператор може лише приймати товар (Отримано)' });
     }
 
+    // Отримуємо замовлення з його товарами, щоб знати, що додавати на склад
+    const order = await prisma.purchaseOrder.findUnique({
+      where: { id: Number(id) },
+      include: { orderItems: true }
+    });
+
+    if (!order) return res.status(404).json({ error: 'Замовлення не знайдено' });
+
+    // ЛОГІКА СКЛАДУ: Якщо статус змінюється на "Отримано"
+    if (status === 'Отримано' && order.status !== 'Отримано') {
+      
+      // Для простоти приймаємо товар на "Головний склад" (беремо перший зі списку)
+      const defaultWarehouse = await prisma.warehouse.findFirst();
+      
+      if (!defaultWarehouse) {
+        return res.status(400).json({ error: 'Не знайдено жодного складу для прийому.' });
+      }
+
+      // Використовуємо ТРАНЗАКЦІЮ для гарантії цілісності даних
+      await prisma.$transaction(async (tx) => {
+        // 1. Оновлюємо статус замовлення
+        await tx.purchaseOrder.update({
+          where: { id: Number(id) },
+          data: { status }
+        });
+
+        // 2. Проходимося по всіх товарах у замовленні і додаємо їх на склад
+        for (const item of order.orderItems) {
+          const existingInventory = await tx.inventory.findFirst({
+            where: {
+              chemical_id: item.chemical_id,
+              warehouse_id: defaultWarehouse.id
+            }
+          });
+
+          if (existingInventory) {
+            // Якщо товар вже є — збільшуємо його залишок
+            await tx.inventory.update({
+              where: { id: existingInventory.id },
+              data: { quantity: Number(existingInventory.quantity) + Number(item.quantity) }
+            });
+          } else {
+            // Якщо товару ще не було — створюємо новий запис
+            await tx.inventory.create({
+              data: {
+                chemical_id: item.chemical_id,
+                warehouse_id: defaultWarehouse.id,
+                quantity: Number(item.quantity),
+                min_threshold: 50 // Встановлюємо базовий поріг
+              }
+            });
+          }
+        }
+      });
+
+      return res.json({ message: 'Замовлення отримано, склад оновлено!' });
+    }
+
+    // Якщо це просто зміна статусу на "Замовлено" (без поповнення складу)
     const updatedOrder = await prisma.purchaseOrder.update({
       where: { id: Number(id) },
       data: { status }
     });
     res.json(updatedOrder);
+
   } catch (error) {
+    console.error('Помилка оновлення статусу:', error);
     res.status(500).json({ error: 'Помилка сервера' });
   }
 });
