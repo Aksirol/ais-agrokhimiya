@@ -8,6 +8,7 @@ const fieldRoutes = require('./routes/fields');
 const applicationRoutes = require('./routes/applications');
 const analyticsRoutes = require('./routes/analytics'); // НОВЕ
 const authRoutes = require('./routes/auth');
+const dictionariesRoutes = require('./routes/dictionaries');
 
 const { authenticateToken } = require('./middleware/auth');
 
@@ -27,6 +28,7 @@ app.use('/api/fields', authenticateToken, fieldRoutes);
 app.use('/api/applications', authenticateToken, applicationRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/dictionaries', authenticateToken, dictionariesRoutes);
 
 app.listen(PORT, () => {
   console.log(`Сервер успішно запущено на порту ${PORT}`);
