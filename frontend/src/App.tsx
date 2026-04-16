@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { 
-  Bell, User, LayoutDashboard, ShoppingCart, 
+  Bell, LayoutDashboard, ShoppingCart, 
   Package, Map, BarChart2, LogOut, ChevronDown, Search
 } from 'lucide-react';
 
