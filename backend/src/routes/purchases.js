@@ -1,11 +1,13 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
 // GET /api/purchases - Отримати список закупівель
-router.get('/', async (req, res) => {
+// Доступ для всіх трьох ролей
+router.get('/', authorizeRoles('admin', 'agronomist', 'operator'), async (req, res) => {
   try {
     const orders = await prisma.purchaseOrder.findMany({
       include: {
@@ -16,7 +18,7 @@ router.get('/', async (req, res) => {
       },
       orderBy: { order_date: 'desc' } // Сортуємо від новіших до старіших
     });
-    
+
     res.json(orders);
   } catch (error) {
     console.error('Помилка отримання закупівель:', error);

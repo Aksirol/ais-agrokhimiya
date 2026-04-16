@@ -1,11 +1,13 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
 // GET /api/inventory - Отримати список залишків на складах
-router.get('/', async (req, res) => {
+// Доступ для всіх трьох ролей
+router.get('/', authorizeRoles('admin', 'agronomist', 'operator'), async (req, res) => {
   try {
     const inventories = await prisma.inventory.findMany({
       include: {
@@ -14,7 +16,7 @@ router.get('/', async (req, res) => {
       },
       orderBy: { last_updated: 'desc' }
     });
-    
+
     res.json(inventories);
   } catch (error) {
     console.error('Помилка отримання складу:', error);

@@ -7,11 +7,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// НОВЕ: Створюємо тип ENUM для ролей
+enum Role {
+  admin
+  agronomist
+  operator
+}
+
 model User {
   id                 Int                 @id @default(autoincrement())
   name               String
   email              String              @unique
-  role               String
+  password           String              
+  role               Role                @default(operator) // НОВЕ: Використовуємо ENUM
   purchaseOrders     PurchaseOrder[]
   applications       Application[]
   inventoryMovements InventoryMovement[]

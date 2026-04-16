@@ -7,9 +7,10 @@ import type { PurchaseOrder } from '../types';
 export default function Purchases() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+  const user = JSON.parse(localStorage.getItem('agro_user') || '{}');
 
   useEffect(() => {
-    axios.get('http://localhost:5000/api/purchases')
+    axios.get('/api/purchases')
       .then(response => {
         setOrders(response.data);
         if (response.data.length > 0) setSelectedOrder(response.data[0]);
@@ -63,8 +64,8 @@ export default function Purchases() {
             </thead>
             <tbody>
               {orders.map((order) => (
-                <tr 
-                  key={order.id} 
+                <tr
+                  key={order.id}
                   onClick={() => setSelectedOrder(order)}
                   className={`border-b cursor-pointer hover:bg-gray-50 ${selectedOrder?.id === order.id ? 'bg-green-50' : ''}`}
                 >
@@ -81,13 +82,19 @@ export default function Purchases() {
               ))}
             </tbody>
           </table>
-          
+
           <div className="p-4 border-t flex justify-between items-center bg-gray-50">
-            <div className="flex gap-2">
-              <button className="bg-agro-dark text-white px-4 py-1.5 rounded flex items-center gap-1 text-sm">
-                <span className="text-lg leading-none">+</span> Додати
+            <div className="flex gap-2 p-2.5 border-t border-[#e0e0db] mt-auto">
+              {/* Кнопка "Додати" доступна лише адміну та агроному */}
+              {(user.role === 'admin' || user.role === 'agronomist') && (
+                <button className="h-[32px] px-3.5 bg-[#2d7a50] text-white border-none rounded-[7px] text-[13px] font-medium hover:bg-opacity-90 transition-colors">
+                  + Додати
+                </button>
+              )}
+
+              <button className="h-[32px] px-3.5 bg-white text-[#1a1a18] border border-[#d0d0cc] rounded-[7px] text-[13px] hover:bg-gray-50 transition-colors">
+                {user.role === 'operator' ? 'Переглянути' : 'Редагувати'}
               </button>
-              <button className="bg-white border px-4 py-1.5 rounded text-sm hover:bg-gray-50">Редагувати</button>
             </div>
           </div>
         </div>

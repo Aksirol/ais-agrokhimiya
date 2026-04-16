@@ -1,17 +1,19 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
+const { authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
 // GET /api/analytics/dashboard - Отримати дані для графіків
-router.get('/dashboard', async (req, res) => {
+// Доступ лише для admin та agronomist
+router.get('/dashboard', authorizeRoles('admin', 'agronomist'), async (req, res) => {
   try {
     // 1. Рахуємо витрати по постачальниках (для кругової діаграми)
     const purchases = await prisma.purchaseOrder.findMany({
       include: { supplier: true }
     });
-    
+
     const supplierExpenses = purchases.reduce((acc, order) => {
       const name = order.supplier.name;
       acc[name] = (acc[name] || 0) + Number(order.total_amount);
@@ -19,7 +21,7 @@ router.get('/dashboard', async (req, res) => {
     }, {});
 
     const pieData = Object.keys(supplierExpenses).map(name => ({
-      name, 
+      name,
       value: supplierExpenses[name]
     }));
 
@@ -36,13 +38,13 @@ router.get('/dashboard', async (req, res) => {
     }, {});
 
     const barData = Object.keys(chemicalUsage).map(name => ({
-      name, 
+      name,
       amount: chemicalUsage[name]
     }));
 
     // Відправляємо обидва масиви даних на фронтенд
     res.json({ pieData, barData });
-    
+
   } catch (error) {
     console.error('Помилка формування аналітики:', error);
     res.status(500).json({ error: 'Помилка сервера' });
