@@ -1,19 +1,14 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authorizeRoles } = require('../middleware/auth'); // Імпортуємо перевірку ролей
+const { authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// GET /api/applications - Отримати журнал (доступно адміну та агроному)
-// Зверни увагу: ми додаємо authorizeRoles тут (у самому маршруті) або в index.js
+// 1. READ: Отримати журнал (Адмін бачить все, Агроном - тільки своє)
 router.get('/', authorizeRoles('admin', 'agronomist'), async (req, res) => {
   try {
-    // Реалізація принципу найменших привілеїв (Record-level access control)
-    // Якщо роль 'agronomist' - фільтруємо по його ID. Якщо 'admin' - фільтр порожній (бачить все).
-    const whereClause = req.user.role === 'agronomist' 
-      ? { user_id: req.user.id } 
-      : {};
+    const whereClause = req.user.role === 'agronomist' ? { user_id: req.user.id } : {};
 
     const applications = await prisma.application.findMany({
       where: whereClause,
@@ -25,10 +20,179 @@ router.get('/', authorizeRoles('admin', 'agronomist'), async (req, res) => {
       },
       orderBy: { applied_date: 'desc' }
     });
-    
     res.json(applications);
   } catch (error) {
-    console.error('Помилка отримання журналу:', error);
+    res.status(500).json({ error: 'Помилка сервера' });
+  }
+});
+
+// 2. Допоміжний маршрут: Дані для форми
+router.get('/form-data', authorizeRoles('admin', 'agronomist'), async (req, res) => {
+  try {
+    // Беремо лише активні позиції на складі, де залишок > 0
+    const inventory = await prisma.inventory.findMany({
+      where: { quantity: { gt: 0 } },
+      include: { chemical: true, warehouse: true }
+    });
+    const fields = await prisma.field.findMany();
+    res.json({ inventory, fields });
+  } catch (error) {
+    res.status(500).json({ error: 'Помилка сервера' });
+  }
+});
+
+// 3. CREATE: Створити запис і СПИСАТИ зі складу
+router.post('/', authorizeRoles('admin', 'agronomist'), async (req, res) => {
+  try {
+    const { inventory_id, field_id, applied_date, quantity_used, norm_per_ha, purpose } = req.body;
+
+    // Знаходимо позицію на складі
+    const invItem = await prisma.inventory.findUnique({
+      where: { id: Number(inventory_id) },
+      include: { chemical: true }
+    });
+
+    if (!invItem) return res.status(404).json({ error: 'Позицію на складі не знайдено' });
+    
+    // Перевіряємо, чи вистачає товару
+    if (Number(invItem.quantity) < Number(quantity_used)) {
+      return res.status(400).json({ error: `Недостатньо товару на складі. Доступно: ${invItem.quantity}` });
+    }
+
+    // ТРАНЗАКЦІЯ: Створюємо запис і віднімаємо залишок
+    const result = await prisma.$transaction(async (tx) => {
+      // Віднімаємо зі складу
+      await tx.inventory.update({
+        where: { id: invItem.id },
+        data: { quantity: Number(invItem.quantity) - Number(quantity_used) }
+      });
+
+      // Створюємо запис про використання
+      const newApp = await tx.application.create({
+        data: {
+          chemical_id: invItem.chemical_id,
+          field_id: Number(field_id),
+          user_id: req.user.id,
+          warehouse_id: invItem.warehouse_id,
+          applied_date: new Date(applied_date),
+          quantity_used: Number(quantity_used),
+          base_unit: invItem.chemical.base_unit,
+          norm_per_ha: Number(norm_per_ha),
+          purpose
+        }
+      });
+      return newApp;
+    });
+
+    res.status(201).json(result);
+  } catch (error) {
+    console.error('Помилка створення запису:', error);
+    res.status(500).json({ error: 'Помилка сервера' });
+  }
+});
+
+// 4. DELETE: Видалити запис і ПОВЕРНУТИ товар на склад
+router.delete('/:id', authorizeRoles('admin', 'agronomist'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const app = await prisma.application.findUnique({ where: { id: Number(id) } });
+    if (!app) return res.status(404).json({ error: 'Запис не знайдено' });
+
+    // Перевірка прав (Агроном може видалити тільки свій запис)
+    if (req.user.role === 'agronomist' && app.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Ви можете видаляти лише власні записи' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Шукаємо цей товар на тому ж складі
+      const invItem = await tx.inventory.findFirst({
+        where: { chemical_id: app.chemical_id, warehouse_id: app.warehouse_id }
+      });
+
+      // Якщо позиція на складі ще існує, повертаємо кількість
+      if (invItem) {
+        await tx.inventory.update({
+          where: { id: invItem.id },
+          data: { quantity: Number(invItem.quantity) + Number(app.quantity_used) }
+        });
+      }
+
+      // Видаляємо сам запис
+      await tx.application.delete({ where: { id: Number(id) } });
+    });
+
+    res.json({ message: 'Запис видалено, товар повернуто на склад' });
+  } catch (error) {
+    res.status(500).json({ error: 'Помилка сервера' });
+  }
+});
+
+// 5. UPDATE: Завершити використання і повернути залишки на склад
+router.put('/:id/complete', authorizeRoles('admin', 'agronomist'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { returned_quantity } = req.body;
+
+    // 1. Знаходимо запис
+    const app = await prisma.application.findUnique({ where: { id: Number(id) } });
+    if (!app) return res.status(404).json({ error: 'Запис не знайдено' });
+    if (app.status === 'Завершено') return res.status(400).json({ error: 'Цей запис вже завершено' });
+
+    // 2. Перевірка прав (Агроном може завершувати тільки свої записи)
+    if (req.user.role === 'agronomist' && app.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Ви можете завершувати лише власні записи' });
+    }
+
+    const returnedNum = Number(returned_quantity) || 0;
+
+    // Захист від помилок: не можна повернути більше, ніж було взято
+    if (returnedNum > Number(app.quantity_used)) {
+      return res.status(400).json({ error: 'Не можна повернути більше, ніж було взято зі складу' });
+    }
+
+    // 3. ТРАНЗАКЦІЯ: Повертаємо товар і оновлюємо статус
+    const updatedApp = await prisma.$transaction(async (tx) => {
+      
+      // Якщо є залишки, повертаємо їх на склад
+      if (returnedNum > 0) {
+        const invItem = await tx.inventory.findFirst({
+          where: { chemical_id: app.chemical_id, warehouse_id: app.warehouse_id }
+        });
+        
+        if (invItem) {
+          // Оновлюємо існуючу позицію на складі
+          await tx.inventory.update({
+            where: { id: invItem.id },
+            data: { quantity: Number(invItem.quantity) + returnedNum }
+          });
+        } else {
+          // Якщо товар зі складу повністю видалили, створюємо позицію знову
+          await tx.inventory.create({
+            data: {
+              chemical_id: app.chemical_id,
+              warehouse_id: app.warehouse_id,
+              quantity: returnedNum,
+              min_threshold: 0
+            }
+          });
+        }
+      }
+
+      // Оновлюємо статус і фінальну (фактичну) витрату
+      return await tx.application.update({
+        where: { id: Number(id) },
+        data: { 
+          status: 'Завершено',
+          quantity_used: Number(app.quantity_used) - returnedNum // Віднімаємо повернуте
+        },
+        include: { chemical: true, field: true, user: true, warehouse: true }
+      });
+    });
+
+    res.json(updatedApp);
+  } catch (error) {
+    console.error('Помилка завершення:', error);
     res.status(500).json({ error: 'Помилка сервера' });
   }
 });
