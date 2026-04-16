@@ -1,16 +1,44 @@
+
 services:
+  # 1. База даних PostgreSQL
   db:
-    image: postgres:15
-    container_name: agro_postgres
+    image: postgres:15-alpine
+    container_name: agro_db
     restart: always
     environment:
-      POSTGRES_USER: agro_user
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: agro_password
       POSTGRES_DB: agro_db
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Бекенд Node.js
+  backend:
+    build: ./backend
+    container_name: agro_backend
+    restart: always
+    depends_on:
+      - db
+    environment:
+      # Зверни увагу: замість localhost ми пишемо ім'я контейнера "db"
+      DATABASE_URL: "postgresql://postgres:agro_password@db:5432/agro_db?schema=public"
+      JWT_SECRET: "your_super_secret_jwt_key_here"
+      PORT: 5000
+    ports:
+      - "5000:5000"
+
+  # 3. Фронтенд React + Nginx
+  frontend:
+    build: ./frontend
+    container_name: agro_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:80" # Сайт буде доступний просто за адресою http://localhost
 
 volumes:
-  pgdata:
+  # Том для збереження даних БД, щоб вони не зникали при перезапуску
+  postgres_data:
