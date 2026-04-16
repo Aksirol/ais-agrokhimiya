@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
+import { ChevronUp, ChevronDown, Search } from 'lucide-react';
 
 export default function Purchases() {
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   
+  // --- СТАНИ ДЛЯ ФІЛЬТРАЦІЇ ТА СОРТУВАННЯ ---
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('Всі');
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key: 'date', direction: 'desc' });
+
   // Дані для модального вікна
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -15,7 +21,6 @@ export default function Purchases() {
     supplier_id: '', chemical_id: '', quantity: '', price_per_unit: '', total_amount: ''
   });
 
-  // Перевірка прав
   const currentUser = JSON.parse(localStorage.getItem('agro_user') || '{}');
   const canCreate = currentUser.role === 'admin' || currentUser.role === 'agronomist';
   const canApprove = currentUser.role === 'admin';
@@ -44,7 +49,6 @@ export default function Purchases() {
     if (canCreate) fetchFormData();
   }, []);
 
-  // Автоматичний розрахунок суми
   useEffect(() => {
     if (formData.quantity && formData.price_per_unit) {
       setFormData(prev => ({
@@ -54,15 +58,64 @@ export default function Purchases() {
     }
   }, [formData.quantity, formData.price_per_unit]);
 
+  // --- ЛОГІКА СОРТУВАННЯ ---
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // --- ОБРОБКА ДАНИХ (ФІЛЬТРАЦІЯ + СОРТУВАННЯ) ---
+  const processedOrders = [...orders]
+    // 1. Фільтрація
+    .filter(order => {
+      const matchesSearch = 
+        order.supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.user.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = filterStatus === 'Всі' || order.status === filterStatus;
+      return matchesSearch && matchesStatus;
+    })
+    // 2. Сортування
+    .sort((a, b) => {
+      if (!sortConfig) return 0;
+      
+      const { key, direction } = sortConfig;
+      const modifier = direction === 'asc' ? 1 : -1;
+
+      switch (key) {
+        case 'date':
+          return (new Date(a.order_date).getTime() - new Date(b.order_date).getTime()) * modifier;
+        case 'supplier':
+          return a.supplier.name.localeCompare(b.supplier.name) * modifier;
+        case 'amount':
+          return (Number(a.total_amount) - Number(b.total_amount)) * modifier;
+        case 'author':
+          return a.user.name.localeCompare(b.user.name) * modifier;
+        case 'status':
+          return a.status.localeCompare(b.status) * modifier;
+        default:
+          return 0;
+      }
+    });
+
+  // Допоміжний компонент для іконки сортування
+  const SortIcon = ({ columnKey }: { columnKey: string }) => {
+    if (sortConfig?.key !== columnKey) return <ChevronDown size={14} className="text-transparent group-hover:text-gray-300 transition-colors" />;
+    return sortConfig.direction === 'asc' 
+      ? <ChevronUp size={14} className="text-[#2d7a50]" /> 
+      : <ChevronDown size={14} className="text-[#2d7a50]" />;
+  };
+
+  // Інші існуючі функції (handleSubmit, handleUpdateStatus, handleDelete)...
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await axios.post('/api/purchases', formData);
       setIsModalOpen(false);
       fetchData();
-    } catch (error) {
-      alert('Помилка створення заявки');
-    }
+    } catch (error) { alert('Помилка створення заявки'); }
   };
 
   const handleUpdateStatus = async (id: number, newStatus: string) => {
@@ -70,9 +123,7 @@ export default function Purchases() {
       await axios.put(`/api/purchases/${id}/status`, { status: newStatus });
       fetchData();
       if (selectedOrder?.id === id) setSelectedOrder({ ...selectedOrder, status: newStatus });
-    } catch (error) {
-      alert('Помилка оновлення статусу');
-    }
+    } catch (error) { alert('Помилка оновлення статусу'); }
   };
 
   const handleDelete = async (id: number) => {
@@ -84,7 +135,6 @@ export default function Purchases() {
     } catch (error) {}
   };
 
-  // Кольори статусів
   const getStatusBadge = (status: string) => {
     if (status === 'Отримано') return <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#d1f0e0] text-[#1e5c36]">Отримано</span>;
     if (status === 'Замовлено') return <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#e6f1fb] text-[#0c447c]">Замовлено</span>;
@@ -95,21 +145,57 @@ export default function Purchases() {
     <div className="flex-1 overflow-auto p-5 bg-[#f5f5f2] relative">
       <div className="text-[20px] font-medium text-[#1a1a18] mb-4">Закупівлі</div>
 
+      {/* --- ПАНЕЛЬ ФІЛЬТРІВ --- */}
+      <div className="flex gap-3 mb-4">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input 
+            type="text" 
+            placeholder="Пошук (Постачальник, Автор)..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8 pr-3 py-1.5 h-[34px] w-[250px] border border-[#d0d0cc] rounded-[8px] text-[13px] bg-white focus:outline-none focus:border-[#2d7a50]"
+          />
+        </div>
+        <select 
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="h-[34px] border border-[#d0d0cc] rounded-[8px] px-2.5 text-[13px] bg-white focus:outline-none focus:border-[#2d7a50]"
+        >
+          <option value="Всі">Всі статуси</option>
+          <option value="Очікує">Очікує</option>
+          <option value="Замовлено">Замовлено</option>
+          <option value="Отримано">Отримано</option>
+        </select>
+      </div>
+
       <div className="flex gap-3.5">
         {/* Таблиця */}
         <div className="flex-1 bg-white border border-[#e0e0db] rounded-[10px] overflow-hidden flex flex-col">
-          <table className="w-full border-collapse table-fixed text-left">
+          <table className="w-full border-collapse table-fixed text-left select-none">
             <thead className="bg-[#f8f8f6]">
               <tr>
-                <th className="w-[15%] py-2.5 px-3 text-[12px] font-medium text-[#666] border-b border-[#e0e0db]">Дата</th>
-                <th className="w-[30%] py-2.5 px-3 text-[12px] font-medium text-[#666] border-b border-[#e0e0db]">Постачальник</th>
-                <th className="w-[20%] py-2.5 px-3 text-[12px] font-medium text-[#666] border-b border-[#e0e0db]">Сума</th>
-                <th className="w-[20%] py-2.5 px-3 text-[12px] font-medium text-[#666] border-b border-[#e0e0db]">Автор</th>
-                <th className="w-[15%] py-2.5 px-3 text-[12px] font-medium text-[#666] border-b border-[#e0e0db]">Статус</th>
+                {/* --- КЛІКАБЕЛЬНІ ЗАГОЛОВКИ --- */}
+                <th onClick={() => handleSort('date')} className="w-[15%] py-2.5 px-3 text-[12px] font-medium text-[#666] border-b border-[#e0e0db] cursor-pointer hover:bg-gray-100 group">
+                  <div className="flex items-center gap-1">Дата <SortIcon columnKey="date" /></div>
+                </th>
+                <th onClick={() => handleSort('supplier')} className="w-[30%] py-2.5 px-3 text-[12px] font-medium text-[#666] border-b border-[#e0e0db] cursor-pointer hover:bg-gray-100 group">
+                  <div className="flex items-center gap-1">Постачальник <SortIcon columnKey="supplier" /></div>
+                </th>
+                <th onClick={() => handleSort('amount')} className="w-[20%] py-2.5 px-3 text-[12px] font-medium text-[#666] border-b border-[#e0e0db] cursor-pointer hover:bg-gray-100 group">
+                  <div className="flex items-center gap-1">Сума <SortIcon columnKey="amount" /></div>
+                </th>
+                <th onClick={() => handleSort('author')} className="w-[20%] py-2.5 px-3 text-[12px] font-medium text-[#666] border-b border-[#e0e0db] cursor-pointer hover:bg-gray-100 group">
+                  <div className="flex items-center gap-1">Автор <SortIcon columnKey="author" /></div>
+                </th>
+                <th onClick={() => handleSort('status')} className="w-[15%] py-2.5 px-3 text-[12px] font-medium text-[#666] border-b border-[#e0e0db] cursor-pointer hover:bg-gray-100 group">
+                  <div className="flex items-center gap-1">Статус <SortIcon columnKey="status" /></div>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {orders.map(order => (
+              {/* РЕНДЕРИМО ВІДФІЛЬТРОВАНІ І ВІДСОРТОВАНІ ДАНІ */}
+              {processedOrders.map(order => (
                 <tr 
                   key={order.id} 
                   onClick={() => setSelectedOrder(order)}
@@ -122,10 +208,11 @@ export default function Purchases() {
                   <td className="py-2.5 px-3 border-b border-[#f4f4f2]">{getStatusBadge(order.status)}</td>
                 </tr>
               ))}
-              {orders.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-500">Немає замовлень</td></tr>}
+              {processedOrders.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-500">Замовлень не знайдено</td></tr>}
             </tbody>
           </table>
           
+          {/* Кнопка "Створити заявку" ... залишається як була */}
           <div className="flex gap-2 p-2.5 border-t border-[#e0e0db] mt-auto">
             {canCreate && (
               <button onClick={() => { setFormData({supplier_id: '', chemical_id: '', quantity: '', price_per_unit: '', total_amount: ''}); setIsModalOpen(true); }} className="h-[32px] px-3.5 bg-[#2d7a50] text-white border-none rounded-[7px] text-[13px] font-medium hover:bg-opacity-90">
@@ -135,7 +222,9 @@ export default function Purchases() {
           </div>
         </div>
 
-        {/* Права колонка: Деталі */}
+        {/* Права колонка (Деталі) та Модальне вікно залишаються абсолютно без змін */}
+        {/* ... (решта коду з попередньої версії) ... */}
+        
         <div className="w-[260px] bg-white border border-[#e0e0db] rounded-[10px] p-4 shrink-0 self-start">
           <div className="text-[13px] font-medium text-[#1a1a18] mb-3 pb-2 border-b border-[#f0f0ee]">
             Деталі замовлення
@@ -188,7 +277,7 @@ export default function Purchases() {
         </div>
       </div>
 
-      {/* Модальне вікно */}
+      {/* Модальне вікно (залишається без змін) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white rounded-[10px] w-[450px] shadow-lg overflow-hidden">
