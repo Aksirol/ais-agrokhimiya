@@ -47,6 +47,8 @@ function App() {
     localStorage.setItem('agro_user', JSON.stringify(user));
     setIsAuthenticated(true);
     setCurrentUser(user);
+    // Примусово перекидаємо на дашборд при новому вході
+    setActivePage('dashboard');
   };
 
   const handleLogout = () => {
@@ -58,6 +60,9 @@ function App() {
   };
 
   if (!isAuthenticated) return <Login onLogin={handleLogin} />;
+
+  // Зручна змінна для перевірки доступу
+  const canSeeAdvanced = currentUser?.role === 'admin' || currentUser?.role === 'agronomist';
 
   return (
     <div className="flex h-screen bg-[#f5f5f2] font-sans text-gray-800">
@@ -72,6 +77,7 @@ function App() {
         </div>
 
         <nav className="flex-1 py-3 flex flex-col">
+          {/* Доступно всім */}
           <button onClick={() => setActivePage('dashboard')} className={`flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors ${activePage === 'dashboard' ? 'bg-[#2d7a50] text-[#e8f5ee]' : 'text-[#b0d4be] hover:bg-[#2a5e42]'}`}>
             <LayoutDashboard size={16} /> Дашборд
           </button>
@@ -81,15 +87,21 @@ function App() {
           <button onClick={() => setActivePage('inventory')} className={`flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors ${activePage === 'inventory' ? 'bg-[#2d7a50] text-[#e8f5ee]' : 'text-[#b0d4be] hover:bg-[#2a5e42]'}`}>
             <Package size={16} /> Склад
           </button>
-          <button onClick={() => setActivePage('applications')} className={`flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors ${activePage === 'applications' ? 'bg-[#2d7a50] text-[#e8f5ee]' : 'text-[#b0d4be] hover:bg-[#2a5e42]'}`}>
-            <div className="w-4 h-4 flex items-center justify-center text-current">🌱</div> Використання
-          </button>
-          <button onClick={() => setActivePage('fields')} className={`flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors ${activePage === 'fields' ? 'bg-[#2d7a50] text-[#e8f5ee]' : 'text-[#b0d4be] hover:bg-[#2a5e42]'}`}>
-            <Map size={16} /> Поля
-          </button>
-          <button onClick={() => setActivePage('analytics')} className={`flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors ${activePage === 'analytics' ? 'bg-[#2d7a50] text-[#e8f5ee]' : 'text-[#b0d4be] hover:bg-[#2a5e42]'}`}>
-            <BarChart2 size={16} /> Аналітика
-          </button>
+
+          {/* Приховані пункти для Оператора */}
+          {canSeeAdvanced && (
+            <>
+              <button onClick={() => setActivePage('applications')} className={`flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors ${activePage === 'applications' ? 'bg-[#2d7a50] text-[#e8f5ee]' : 'text-[#b0d4be] hover:bg-[#2a5e42]'}`}>
+                <div className="w-4 h-4 flex items-center justify-center text-current">🌱</div> Використання
+              </button>
+              <button onClick={() => setActivePage('fields')} className={`flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors ${activePage === 'fields' ? 'bg-[#2d7a50] text-[#e8f5ee]' : 'text-[#b0d4be] hover:bg-[#2a5e42]'}`}>
+                <Map size={16} /> Поля
+              </button>
+              <button onClick={() => setActivePage('analytics')} className={`flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors ${activePage === 'analytics' ? 'bg-[#2d7a50] text-[#e8f5ee]' : 'text-[#b0d4be] hover:bg-[#2a5e42]'}`}>
+                <BarChart2 size={16} /> Аналітика
+              </button>
+            </>
+          )}
         </nav>
 
         {/* Кнопка виходу в сайдбарі */}
@@ -150,9 +162,15 @@ function App() {
         {activePage === 'dashboard' && <Dashboard />}
         {activePage === 'purchases' && <Purchases />}
         {activePage === 'inventory' && <InventoryPage />}
-        {activePage === 'fields' && <Fields />}
-        {activePage === 'applications' && <Applications />}
-        {activePage === 'analytics' && <Analytics />}
+        
+        {/* Захищений рендер сторінок */}
+        {canSeeAdvanced && (
+          <>
+            {activePage === 'fields' && <Fields />}
+            {activePage === 'applications' && <Applications />}
+            {activePage === 'analytics' && <Analytics />}
+          </>
+        )}
       </main>
     </div>
   );
