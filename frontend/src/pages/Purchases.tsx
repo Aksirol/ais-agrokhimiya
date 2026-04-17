@@ -6,7 +6,7 @@ import { ChevronUp, ChevronDown, Search } from 'lucide-react';
 export default function Purchases() {
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
-  
+
   // --- СТАНИ ДЛЯ ФІЛЬТРАЦІЇ ТА СОРТУВАННЯ ---
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('Всі');
@@ -16,7 +16,7 @@ export default function Purchases() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [chemicals, setChemicals] = useState<any[]>([]);
-  
+
   const [formData, setFormData] = useState({
     supplier_id: '', chemical_id: '', quantity: '', price_per_unit: '', total_amount: ''
   });
@@ -41,7 +41,7 @@ export default function Purchases() {
       const response = await axios.get('/api/purchases/form-data');
       setSuppliers(response.data.suppliers);
       setChemicals(response.data.chemicals);
-    } catch (error) {}
+    } catch (error) { }
   };
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function Purchases() {
   useEffect(() => {
     if (formData.quantity && formData.price_per_unit) {
       setFormData(prev => ({
-        ...prev, 
+        ...prev,
         total_amount: String(Number(prev.quantity) * Number(prev.price_per_unit))
       }));
     }
@@ -71,7 +71,7 @@ export default function Purchases() {
   const processedOrders = [...orders]
     // 1. Фільтрація
     .filter(order => {
-      const matchesSearch = 
+      const matchesSearch =
         order.supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.user.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = filterStatus === 'Всі' || order.status === filterStatus;
@@ -80,7 +80,7 @@ export default function Purchases() {
     // 2. Сортування
     .sort((a, b) => {
       if (!sortConfig) return 0;
-      
+
       const { key, direction } = sortConfig;
       const modifier = direction === 'asc' ? 1 : -1;
 
@@ -103,8 +103,8 @@ export default function Purchases() {
   // Допоміжний компонент для іконки сортування
   const SortIcon = ({ columnKey }: { columnKey: string }) => {
     if (sortConfig?.key !== columnKey) return <ChevronDown size={14} className="text-transparent group-hover:text-gray-300 transition-colors" />;
-    return sortConfig.direction === 'asc' 
-      ? <ChevronUp size={14} className="text-[#2d7a50]" /> 
+    return sortConfig.direction === 'asc'
+      ? <ChevronUp size={14} className="text-[#2d7a50]" />
       : <ChevronDown size={14} className="text-[#2d7a50]" />;
   };
 
@@ -132,12 +132,12 @@ export default function Purchases() {
       await axios.delete(`/api/purchases/${id}`);
       setSelectedOrder(null);
       fetchData();
-    } catch (error) {}
+    } catch (error) { }
   };
 
   const getStatusBadge = (status: string) => {
-    if (status === 'Отримано') return <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#d1f0e0] text-[#1e5c36]">Отримано</span>;
-    if (status === 'Замовлено') return <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#e6f1fb] text-[#0c447c]">Замовлено</span>;
+    if (status === 'RECEIVED') return <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#d1f0e0] text-[#1e5c36]">Отримано</span>;
+    if (status === 'ORDERED') return <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#e6f1fb] text-[#0c447c]">Замовлено</span>;
     return <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#fde8c0] text-[#7a4a10]">Очікує</span>;
   };
 
@@ -149,15 +149,15 @@ export default function Purchases() {
       <div className="flex gap-3 mb-4">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Пошук (Постачальник, Автор)..." 
+          <input
+            type="text"
+            placeholder="Пошук (Постачальник, Автор)..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-8 pr-3 py-1.5 h-[34px] w-[250px] border border-[#d0d0cc] rounded-[8px] text-[13px] bg-white focus:outline-none focus:border-[#2d7a50]"
           />
         </div>
-        <select 
+        <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
           className="h-[34px] border border-[#d0d0cc] rounded-[8px] px-2.5 text-[13px] bg-white focus:outline-none focus:border-[#2d7a50]"
@@ -196,8 +196,8 @@ export default function Purchases() {
             <tbody>
               {/* РЕНДЕРИМО ВІДФІЛЬТРОВАНІ І ВІДСОРТОВАНІ ДАНІ */}
               {processedOrders.map(order => (
-                <tr 
-                  key={order.id} 
+                <tr
+                  key={order.id}
                   onClick={() => setSelectedOrder(order)}
                   className={`cursor-pointer transition-colors group ${selectedOrder?.id === order.id ? 'bg-[#edf7f2]' : 'hover:bg-[#fafaf8]'}`}
                 >
@@ -211,11 +211,11 @@ export default function Purchases() {
               {processedOrders.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-500">Замовлень не знайдено</td></tr>}
             </tbody>
           </table>
-          
+
           {/* Кнопка "Створити заявку" ... залишається як була */}
           <div className="flex gap-2 p-2.5 border-t border-[#e0e0db] mt-auto">
             {canCreate && (
-              <button onClick={() => { setFormData({supplier_id: '', chemical_id: '', quantity: '', price_per_unit: '', total_amount: ''}); setIsModalOpen(true); }} className="h-[32px] px-3.5 bg-[#2d7a50] text-white border-none rounded-[7px] text-[13px] font-medium hover:bg-opacity-90">
+              <button onClick={() => { setFormData({ supplier_id: '', chemical_id: '', quantity: '', price_per_unit: '', total_amount: '' }); setIsModalOpen(true); }} className="h-[32px] px-3.5 bg-[#2d7a50] text-white border-none rounded-[7px] text-[13px] font-medium hover:bg-opacity-90">
                 + Створити заявку
               </button>
             )}
@@ -224,18 +224,18 @@ export default function Purchases() {
 
         {/* Права колонка (Деталі) та Модальне вікно залишаються абсолютно без змін */}
         {/* ... (решта коду з попередньої версії) ... */}
-        
+
         <div className="w-[260px] bg-white border border-[#e0e0db] rounded-[10px] p-4 shrink-0 self-start">
           <div className="text-[13px] font-medium text-[#1a1a18] mb-3 pb-2 border-b border-[#f0f0ee]">
             Деталі замовлення
           </div>
-          
+
           {selectedOrder ? (
             <>
               <div className="flex justify-between mb-2"><span className="text-[12px] text-[#888]">Дата</span><span className="text-[12px] font-medium text-[#1a1a18]">{format(new Date(selectedOrder.order_date), 'dd.MM.yyyy')}</span></div>
               <div className="flex justify-between mb-2"><span className="text-[12px] text-[#888]">Постачальник</span><span className="text-[12px] font-medium text-[#1a1a18] text-right">{selectedOrder.supplier.name}</span></div>
               <div className="flex justify-between mb-2"><span className="text-[12px] text-[#888]">Автор</span><span className="text-[12px] font-medium text-[#1a1a18]">{selectedOrder.user.name}</span></div>
-              
+
               <div className="mt-4 mb-2 text-[11px] text-[#888] font-medium uppercase tracking-wide border-b border-[#f0f0ee] pb-1">Товари</div>
               {selectedOrder.orderItems.map((item: any) => (
                 <div key={item.id} className="mb-2 bg-[#f8f8f6] p-2 rounded border border-[#e0e0db]">
@@ -246,7 +246,7 @@ export default function Purchases() {
                   </div>
                 </div>
               ))}
-              
+
               <div className="flex justify-between mt-3 pt-2 border-t border-[#f0f0ee]">
                 <span className="text-[13px] font-medium text-[#1a1a18]">Всього:</span>
                 <span className="text-[14px] font-bold text-[#2d7a50]">{Number(selectedOrder.total_amount).toLocaleString()} грн</span>
@@ -285,11 +285,11 @@ export default function Purchases() {
               <h3 className="font-medium text-[15px]">Створити заявку на закупівлю</h3>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-700 text-lg leading-none">&times;</button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
               <div>
                 <label className="block text-[12px] text-[#666] mb-1">Постачальник *</label>
-                <select required value={formData.supplier_id} onChange={e => setFormData({...formData, supplier_id: e.target.value})} className="w-full px-3 py-2 border rounded-md text-[13px] focus:outline-none focus:border-[#2d7a50]">
+                <select required value={formData.supplier_id} onChange={e => setFormData({ ...formData, supplier_id: e.target.value })} className="w-full px-3 py-2 border rounded-md text-[13px] focus:outline-none focus:border-[#2d7a50]">
                   <option value="" disabled>Оберіть постачальника...</option>
                   {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
@@ -298,7 +298,7 @@ export default function Purchases() {
               <div className="p-3 bg-[#f8f8f6] border border-[#e0e0db] rounded-md flex flex-col gap-3">
                 <div className="text-[12px] font-medium text-[#1a1a18]">Товар</div>
                 <div>
-                  <select required value={formData.chemical_id} onChange={e => setFormData({...formData, chemical_id: e.target.value})} className="w-full px-3 py-2 border rounded-md text-[13px] focus:outline-none focus:border-[#2d7a50]">
+                  <select required value={formData.chemical_id} onChange={e => setFormData({ ...formData, chemical_id: e.target.value })} className="w-full px-3 py-2 border rounded-md text-[13px] focus:outline-none focus:border-[#2d7a50]">
                     <option value="" disabled>Оберіть хімікат...</option>
                     {chemicals.map(c => <option key={c.id} value={c.id}>{c.name} ({c.category})</option>)}
                   </select>
@@ -306,11 +306,11 @@ export default function Purchases() {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] text-[#666] mb-1">Кількість *</label>
-                    <input required type="number" step="0.1" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} className="w-full px-3 py-1.5 border rounded-md text-[13px] focus:outline-none focus:border-[#2d7a50]" />
+                    <input required type="number" step="0.1" value={formData.quantity} onChange={e => setFormData({ ...formData, quantity: e.target.value })} className="w-full px-3 py-1.5 border rounded-md text-[13px] focus:outline-none focus:border-[#2d7a50]" />
                   </div>
                   <div>
                     <label className="block text-[11px] text-[#666] mb-1">Ціна за од. (грн) *</label>
-                    <input required type="number" step="0.1" value={formData.price_per_unit} onChange={e => setFormData({...formData, price_per_unit: e.target.value})} className="w-full px-3 py-1.5 border rounded-md text-[13px] focus:outline-none focus:border-[#2d7a50]" />
+                    <input required type="number" step="0.1" value={formData.price_per_unit} onChange={e => setFormData({ ...formData, price_per_unit: e.target.value })} className="w-full px-3 py-1.5 border rounded-md text-[13px] focus:outline-none focus:border-[#2d7a50]" />
                   </div>
                 </div>
               </div>

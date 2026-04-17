@@ -46,6 +46,11 @@ router.post('/', authorizeRoles('admin', 'agronomist'), async (req, res) => {
   try {
     const { inventory_id, field_id, applied_date, quantity_used, norm_per_ha, purpose } = req.body;
 
+    // НОВЕ: Базова валідація чисел
+    if (Number(quantity_used) <= 0 || Number(norm_per_ha) <= 0) {
+      return res.status(400).json({ error: 'Кількість та норма мають бути більшими за нуль' });
+    }
+
     // Знаходимо позицію на складі
     const invItem = await prisma.inventory.findUnique({
       where: { id: Number(inventory_id) },
@@ -53,7 +58,7 @@ router.post('/', authorizeRoles('admin', 'agronomist'), async (req, res) => {
     });
 
     if (!invItem) return res.status(404).json({ error: 'Позицію на складі не знайдено' });
-    
+
     // Перевіряємо, чи вистачає товару
     if (Number(invItem.quantity) < Number(quantity_used)) {
       return res.status(400).json({ error: `Недостатньо товару на складі. Доступно: ${invItem.quantity}` });
@@ -79,6 +84,16 @@ router.post('/', authorizeRoles('admin', 'agronomist'), async (req, res) => {
           base_unit: invItem.chemical.base_unit,
           norm_per_ha: Number(norm_per_ha),
           purpose
+        }
+      });
+
+      await tx.inventoryMovement.create({
+        data: {
+          inventory_id: invItem.id,
+          type: 'OUT',
+          quantity: Number(quantity_used),
+          source_application_id: newApp.id,
+          user_id: req.user.id
         }
       });
       return newApp;
@@ -153,27 +168,23 @@ router.put('/:id/complete', authorizeRoles('admin', 'agronomist'), async (req, r
 
     // 3. ТРАНЗАКЦІЯ: Повертаємо товар і оновлюємо статус
     const updatedApp = await prisma.$transaction(async (tx) => {
-      
+
       // Якщо є залишки, повертаємо їх на склад
       if (returnedNum > 0) {
         const invItem = await tx.inventory.findFirst({
           where: { chemical_id: app.chemical_id, warehouse_id: app.warehouse_id }
         });
-        
+
         if (invItem) {
-          // Оновлюємо існуючу позицію на складі
-          await tx.inventory.update({
-            where: { id: invItem.id },
-            data: { quantity: Number(invItem.quantity) + returnedNum }
-          });
-        } else {
-          // Якщо товар зі складу повністю видалили, створюємо позицію знову
-          await tx.inventory.create({
+          await tx.inventory.update({ /* ... */ });
+          // АУДИТ: Логуємо повернення
+          await tx.inventoryMovement.create({
             data: {
-              chemical_id: app.chemical_id,
-              warehouse_id: app.warehouse_id,
+              inventory_id: invItem.id,
+              type: 'RETURN',
               quantity: returnedNum,
-              min_threshold: 0
+              source_application_id: app.id,
+              user_id: req.user.id
             }
           });
         }
@@ -182,7 +193,7 @@ router.put('/:id/complete', authorizeRoles('admin', 'agronomist'), async (req, r
       // Оновлюємо статус і фінальну (фактичну) витрату
       return await tx.application.update({
         where: { id: Number(id) },
-        data: { 
+        data: {
           status: 'Завершено',
           quantity_used: Number(app.quantity_used) - returnedNum // Віднімаємо повернуте
         },

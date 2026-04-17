@@ -94,6 +94,13 @@ export default function Applications() {
     return <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-[#fce8f8] text-[#7a1a6a]">{category}</span>;
   };
 
+  // НОВА ФУНКЦІЯ ДЛЯ СТАТУСІВ ENUM
+  const getAppStatusBadge = (status: string) => {
+    if (status === 'COMPLETED') return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#d1f0e0] text-[#1e5c36]">Завершено</span>;
+    if (status === 'IN_PROGRESS') return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#e6f1fb] text-[#0c447c]">В процесі</span>;
+    return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-gray-200 text-gray-700">{status}</span>;
+  };
+
   return (
     <div className="flex-1 overflow-auto p-5 bg-[#f5f5f2] relative">
       <div className="text-[20px] font-medium text-[#1a1a18] mb-4">Журнал використання</div>
@@ -112,8 +119,8 @@ export default function Applications() {
           className="h-[34px] border border-[#d0d0cc] rounded-[8px] px-2.5 text-[13px] bg-white focus:outline-none focus:border-[#2d7a50]"
         >
           <option value="Всі">Всі статуси</option>
-          <option value="В процесі">В процесі (Активні)</option>
-          <option value="Завершено">Завершено</option>
+          <option value="IN_PROGRESS">В процесі (Активні)</option>
+          <option value="COMPLETED">Завершено</option>
         </select>
       </div>
 
@@ -153,7 +160,8 @@ export default function Applications() {
                   <td className="py-2.5 px-3 text-[13px] text-[#1a1a18] border-b border-[#f4f4f2] truncate">{app.field.name}</td>
                   <td className="py-2.5 px-3 text-[13px] font-bold text-[#c0392b] border-b border-[#f4f4f2]">-{Number(app.quantity_used)} {app.base_unit}</td>
                   <td className="py-2.5 px-3 border-b border-[#f4f4f2]">{getCategoryBadge(app.chemical.category)}</td>
-                  <td className="py-2.5 px-3 border-b border-[#f4f4f2]"><span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${app.status === 'Завершено' ? 'bg-[#d1f0e0] text-[#1e5c36]' : 'bg-[#e6f1fb] text-[#0c447c]'}`}>{app.status}</span></td>
+                  {/* Використовуємо нову функцію */}
+                  <td className="py-2.5 px-3 border-b border-[#f4f4f2]">{getAppStatusBadge(app.status)}</td>
                   <td className="py-2.5 px-3 text-[13px] text-[#666] border-b border-[#f4f4f2]">{app.user.name}</td>
                 </tr>
               ))}
@@ -170,19 +178,23 @@ export default function Applications() {
         <div className="w-[240px] bg-white border border-[#e0e0db] rounded-[10px] p-4 shrink-0 self-start">
           <div className="flex justify-between items-center mb-3 pb-2 border-b border-[#f0f0ee]">
             <span className="text-[13px] font-medium text-[#1a1a18]">Деталі обробки</span>
-            {selectedApp?.status === 'Завершено' && <span className="text-[16px]">✅</span>}
+            {/* Оновлена перевірка статусу */}
+            {selectedApp?.status === 'COMPLETED' && <span className="text-[16px]">✅</span>}
           </div>
           {selectedApp ? (
             <>
-              <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">Статус</span><span className="text-[12px] font-medium text-[#1a1a18]">{selectedApp.status}</span></div>
+              {/* Оновлене відображення статусу в деталях */}
+              <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">Статус</span><span className="text-[12px] font-medium text-[#1a1a18]">{selectedApp.status === 'COMPLETED' ? 'Завершено' : 'В процесі'}</span></div>
               <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">Хімікат</span><span className="text-[12px] font-medium text-[#1a1a18] truncate w-28 text-right">{selectedApp.chemical.name}</span></div>
               <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">Поле</span><span className="text-[12px] font-medium text-[#1a1a18] text-right">{selectedApp.field.name}</span></div>
-              <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">{selectedApp.status === 'Завершено' ? 'Фактична витрата' : 'Взято зі складу'}</span><span className="text-[12px] font-bold text-[#c0392b]">{Number(selectedApp.quantity_used)} {selectedApp.base_unit}</span></div>
+              {/* Оновлена перевірка статусу */}
+              <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">{selectedApp.status === 'COMPLETED' ? 'Фактична витрата' : 'Взято зі складу'}</span><span className="text-[12px] font-bold text-[#c0392b]">{Number(selectedApp.quantity_used)} {selectedApp.base_unit}</span></div>
               <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">Агроном</span><span className="text-[12px] font-medium text-[#1a1a18] text-right">{selectedApp.user.name}</span></div>
 
               {(currentUser.role === 'admin' || currentUser.id === selectedApp.user_id) && (
                 <div className="mt-4 flex flex-col gap-2 pt-3 border-t border-[#f0f0ee]">
-                  {selectedApp.status === 'В процесі' && <button onClick={() => setIsCompleteModalOpen(true)} className="w-full h-[30px] bg-[#e6f1fb] text-[#0c447c] rounded-[7px] text-[12px] font-medium hover:bg-blue-100">Завершити роботи</button>}
+                  {/* Оновлена перевірка статусу */}
+                  {selectedApp.status === 'IN_PROGRESS' && <button onClick={() => setIsCompleteModalOpen(true)} className="w-full h-[30px] bg-[#e6f1fb] text-[#0c447c] rounded-[7px] text-[12px] font-medium hover:bg-blue-100">Завершити роботи</button>}
                   <button onClick={() => handleDelete(selectedApp.id)} className="w-full h-[30px] bg-white border border-[#d0d0cc] text-[#c0392b] rounded-[7px] text-[12px] font-medium hover:bg-red-50">Скасувати запис</button>
                 </div>
               )}

@@ -14,6 +14,17 @@ enum Role {
   operator
 }
 
+enum OrderStatus {
+  PENDING    // Очікує
+  ORDERED    // Замовлено
+  RECEIVED   // Отримано
+}
+
+enum ApplicationStatus {
+  IN_PROGRESS // В процесі
+  COMPLETED   // Завершено
+}
+
 model User {
   id                 Int                 @id @default(autoincrement())
   name               String
@@ -71,7 +82,7 @@ model PurchaseOrder {
   user_id            Int
   order_date         DateTime            @default(now())
   total_amount       Decimal
-  status             String              // Наприклад: "Замовлено", "Отримано", "Скасовано"
+  status             OrderStatus         @default(PENDING)
   is_locked          Boolean             @default(false)
   
   supplier           Supplier            @relation(fields: [supplier_id], references: [id])
@@ -132,7 +143,7 @@ model Application {
   base_unit     String
   norm_per_ha   Decimal
   purpose       String?
-  status        String    @default("В процесі") // НОВЕ ПОЛЕ
+  status ApplicationStatus @default(IN_PROGRESS)
   chemical      Chemical  @relation(fields: [chemical_id], references: [id])
   field         Field     @relation(fields: [field_id], references: [id])
   user          User      @relation(fields: [user_id], references: [id])

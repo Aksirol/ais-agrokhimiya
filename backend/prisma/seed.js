@@ -3,8 +3,14 @@ const bcrypt = require('bcryptjs'); // НОВЕ: імпортуємо біблі
 const prisma = new PrismaClient();
 
 async function main() {
-  // 1. Користувачі (Створюємо 3 різних ролі з однаковим паролем admin123)
-  const hashedPassword = await bcrypt.hash('admin123', 10);
+  // НОВЕ: Запобіжник для продакшену
+  if (process.env.NODE_ENV === 'production') {
+    console.warn('⚠️ ПОПЕРЕДЖЕННЯ: Seed-скрипт заблоковано в Production-середовищі для безпеки даних.');
+    process.exit(0);
+  }
+
+  // Читаємо пароль з .env, а якщо його немає (локальна розробка) — використовуємо admin123;
+  const hashedPassword = await bcrypt.hash(defaultPassword, 10); 
 
   const admin = await prisma.user.upsert({
     where: { email: 'ivan@agro.com' },

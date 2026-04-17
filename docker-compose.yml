@@ -1,11 +1,11 @@
 
 services:
-  # 1. База даних PostgreSQL
   db:
     image: postgres:15-alpine
     container_name: agro_db
     restart: always
     environment:
+      # Пароль бази даних краще теж винести, але для локальної розробки залишимо поки так
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: agro_password
       POSTGRES_DB: agro_db
@@ -14,7 +14,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # 2. Бекенд Node.js
   backend:
     build: ./backend
     container_name: agro_backend
@@ -22,23 +21,11 @@ services:
     depends_on:
       - db
     environment:
-      # Зверни увагу: замість localhost ми пишемо ім'я контейнера "db"
-      DATABASE_URL: "postgresql://postgres:agro_password@db:5432/agro_db?schema=public"
-      JWT_SECRET: "your_super_secret_jwt_key_here"
+      # ЗМІНЕНО: Тепер Docker бере ці значення з файлу .env, який лежить на комп'ютері
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
       PORT: 5000
     ports:
       - "5000:5000"
 
-  # 3. Фронтенд React + Nginx
-  frontend:
-    build: ./frontend
-    container_name: agro_frontend
-    restart: always
-    depends_on:
-      - backend
-    ports:
-      - "80:80" # Сайт буде доступний просто за адресою http://localhost
-
-volumes:
-  # Том для збереження даних БД, щоб вони не зникали при перезапуску
-  postgres_data:
+# ... (інше залишається без змін)

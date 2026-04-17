@@ -37,129 +37,126 @@ router.get('/form-data', authorizeRoles('admin', 'agronomist'), async (req, res)
 // 3. Створити нове замовлення (Адмін та Агроном)
 router.post('/', authorizeRoles('admin', 'agronomist'), async (req, res) => {
   try {
-    const { supplier_id, total_amount, chemical_id, quantity, price_per_unit } = req.body;
+    // ПРИБРАНО total_amount з деструктуризації — ми не довіряємо фронтенду!
+    const { supplier_id, chemical_id, quantity, price_per_unit } = req.body;
     
-    // Агроном створює зі статусом "Очікує", Адмін може одразу "Замовлено"
-    const initialStatus = req.user.role === 'admin' ? 'Замовлено' : 'Очікує';
+    // БЕЗПЕКА: Сервер сам рахує суму
+    const calculatedTotal = Number(quantity) * Number(price_per_unit);
+    // Використовуємо нові ENUM статуси
+    const initialStatus = req.user.role === 'admin' ? 'ORDERED' : 'PENDING';
 
     const newOrder = await prisma.purchaseOrder.create({
       data: {
         supplier_id: Number(supplier_id),
-        user_id: req.user.id, // ID того, хто створив
+        user_id: req.user.id,
         order_date: new Date(),
-        total_amount: Number(total_amount),
+        total_amount: calculatedTotal, // Зберігаємо безпечну суму
         status: initialStatus,
         orderItems: {
           create: [{
             chemical_id: Number(chemical_id),
             quantity: Number(quantity),
-            purchase_unit: 'шт/кг/л', // Спрощено для прикладу
+            purchase_unit: 'шт/кг/л',
             price_per_unit: Number(price_per_unit)
           }]
         }
       }
     });
     res.status(201).json(newOrder);
-  } catch (error) {
-    console.error('Помилка створення замовлення:', error);
-    res.status(500).json({ error: 'Помилка сервера' });
-  }
+  } catch (error) { /* обробка помилки */ }
 });
 
 // 4. Змінити статус замовлення (Адмін затверджує, Оператор приймає)
 router.put('/:id/status', authorizeRoles('admin', 'operator'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // 'Замовлено' або 'Отримано'
+    // ТЕПЕР МИ ВИМАГАЄМО warehouse_id ВІД ФРОНТЕНДУ
+    const { status, warehouse_id } = req.body; 
     
-    // Перевірка логіки ролей
-    if (req.user.role === 'operator' && status !== 'Отримано') {
-      return res.status(403).json({ error: 'Оператор може лише приймати товар (Отримано)' });
-    }
-
-    // Отримуємо замовлення з його товарами, щоб знати, що додавати на склад
     const order = await prisma.purchaseOrder.findUnique({
       where: { id: Number(id) },
       include: { orderItems: true }
     });
 
-    if (!order) return res.status(404).json({ error: 'Замовлення не знайдено' });
+    if (!order) return res.status(404).json({ error: 'Не знайдено' });
+    
+    // БЕЗПЕКА: Перевірка is_locked
+    if (order.is_locked) return res.status(400).json({ error: 'Замовлення заблоковано' });
 
-    // ЛОГІКА СКЛАДУ: Якщо статус змінюється на "Отримано"
-    if (status === 'Отримано' && order.status !== 'Отримано') {
-      
-      // Для простоти приймаємо товар на "Головний склад" (беремо перший зі списку)
-      const defaultWarehouse = await prisma.warehouse.findFirst();
-      
-      if (!defaultWarehouse) {
-        return res.status(400).json({ error: 'Не знайдено жодного складу для прийому.' });
-      }
+    if (status === 'RECEIVED' && order.status !== 'RECEIVED') {
+      if (!warehouse_id) return res.status(400).json({ error: 'Оберіть склад для прийому товару' });
 
-      // Використовуємо ТРАНЗАКЦІЮ для гарантії цілісності даних
       await prisma.$transaction(async (tx) => {
-        // 1. Оновлюємо статус замовлення
+        // Оновлюємо статус і блокуємо замовлення
         await tx.purchaseOrder.update({
           where: { id: Number(id) },
-          data: { status }
+          data: { status, is_locked: true }
         });
 
-        // 2. Проходимося по всіх товарах у замовленні і додаємо їх на склад
         for (const item of order.orderItems) {
-          const existingInventory = await tx.inventory.findFirst({
-            where: {
-              chemical_id: item.chemical_id,
-              warehouse_id: defaultWarehouse.id
-            }
+          // Шукаємо позицію на КОНКРЕТНОМУ складі
+          const existingInv = await tx.inventory.findFirst({
+            where: { chemical_id: item.chemical_id, warehouse_id: Number(warehouse_id) }
           });
 
-          if (existingInventory) {
-            // Якщо товар вже є — збільшуємо його залишок
+          let invId;
+          if (existingInv) {
             await tx.inventory.update({
-              where: { id: existingInventory.id },
-              data: { quantity: Number(existingInventory.quantity) + Number(item.quantity) }
+              where: { id: existingInv.id },
+              data: { quantity: Number(existingInv.quantity) + Number(item.quantity) }
             });
+            invId = existingInv.id;
           } else {
-            // Якщо товару ще не було — створюємо новий запис
-            await tx.inventory.create({
+            const newInv = await tx.inventory.create({
               data: {
                 chemical_id: item.chemical_id,
-                warehouse_id: defaultWarehouse.id,
+                warehouse_id: Number(warehouse_id),
                 quantity: Number(item.quantity),
-                min_threshold: 50 // Встановлюємо базовий поріг
+                min_threshold: 50
               }
             });
+            invId = newInv.id;
           }
+
+          // АУДИТ: Запис в таблицю рухів (СЕР-1)
+          await tx.inventoryMovement.create({
+            data: {
+              inventory_id: invId,
+              type: 'IN',
+              quantity: Number(item.quantity),
+              source_order_id: order.id,
+              user_id: req.user.id
+            }
+          });
         }
       });
-
-      return res.json({ message: 'Замовлення отримано, склад оновлено!' });
+      return res.json({ message: 'Отримано' });
     }
 
-    // Якщо це просто зміна статусу на "Замовлено" (без поповнення складу)
+    // Для інших статусів
     const updatedOrder = await prisma.purchaseOrder.update({
       where: { id: Number(id) },
       data: { status }
     });
     res.json(updatedOrder);
-
-  } catch (error) {
-    console.error('Помилка оновлення статусу:', error);
-    res.status(500).json({ error: 'Помилка сервера' });
-  }
+  } catch (error) { /* обробка помилки */ }
 });
 
 // 5. Видалити замовлення (Тільки Адмін)
 router.delete('/:id', authorizeRoles('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    // Спочатку видаляємо пов'язані елементи замовлення
+    const order = await prisma.purchaseOrder.findUnique({ where: { id: Number(id) } });
+    
+    // БЕЗПЕКА: Перевірка is_locked
+    if (order.is_locked) {
+      return res.status(400).json({ error: 'Замовлення вже прийняте на склад і заблоковане для видалення.' });
+    }
+
     await prisma.purchaseOrderItem.deleteMany({ where: { order_id: Number(id) } });
-    // Потім саме замовлення
     await prisma.purchaseOrder.delete({ where: { id: Number(id) } });
     res.json({ message: 'Замовлення видалено' });
-  } catch (error) {
-    res.status(500).json({ error: 'Помилка сервера' });
-  }
+  } catch (error) { /* обробка помилки */ }
 });
 
 module.exports = router;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { 
-  Bell, LayoutDashboard, ShoppingCart, 
+import {
+  Bell, LayoutDashboard, ShoppingCart,
   Package, Map, BarChart2, LogOut, ChevronDown, Search
 } from 'lucide-react';
 
@@ -21,14 +21,14 @@ function App() {
   const [activePage, setActivePage] = useState<PageType>('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  
+
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false); // Стан для червоної крапки
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
-  
+
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -36,7 +36,7 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('agro_token');
     const user = localStorage.getItem('agro_user');
-    
+
     if (token && user) {
       setIsAuthenticated(true);
       setCurrentUser(JSON.parse(user));
@@ -49,7 +49,7 @@ function App() {
       if (notifRef.current && !notifRef.current.contains(target)) setIsNotifOpen(false);
       if (searchRef.current && !searchRef.current.contains(target)) setIsSearchFocused(false);
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isAuthenticated]);
@@ -77,7 +77,6 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('agro_token');
     localStorage.removeItem('agro_user');
-    setIsAuthenticated(true); // Для ререндерингу логіну
     setIsAuthenticated(false);
     setCurrentUser(null);
   };
@@ -100,12 +99,12 @@ function App() {
 
   return (
     <div className="flex h-screen bg-[#f5f5f2] font-sans text-gray-800">
-      
+
       {/* Sidebar */}
       <aside className="w-[200px] bg-[#1e4d35] text-white flex flex-col shrink-0 z-20 shadow-xl">
         <div className="h-[52px] flex items-center px-4 border-b border-[#2a6045] gap-2.5">
           <div className="w-7 h-7 bg-[#2d7a50] rounded-md flex items-center justify-center">
-            <svg width="16" height="16" fill="#7ecba0" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
+            <svg width="16" height="16" fill="#7ecba0" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" /></svg>
           </div>
           <span className="text-[13px] font-bold text-[#e8f5ee] tracking-tight">АІС «Агрохімія»</span>
         </div>
@@ -154,12 +153,12 @@ function App() {
         <header className="h-[52px] bg-white border-b border-[#e0e0db] px-5 flex items-center justify-between shrink-0 z-10">
           <div className="relative" ref={searchRef}>
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><Search size={14} /></div>
-            <input 
+            <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setIsSearchFocused(true)}
-              className="w-[280px] h-8 bg-[#f8f8f6] border border-[#d0d0cc] rounded-lg px-3 pl-8 text-[13px] focus:outline-none focus:border-[#2d7a50] transition-all focus:w-[320px]" 
-              placeholder="Швидкий пошук..." 
+              className="w-[280px] h-8 bg-[#f8f8f6] border border-[#d0d0cc] rounded-lg px-3 pl-8 text-[13px] focus:outline-none focus:border-[#2d7a50] transition-all focus:w-[320px]"
+              placeholder="Швидкий пошук..."
             />
             {isSearchFocused && searchQuery.length > 0 && (
               <div className="absolute top-full left-0 mt-1 w-full bg-white border border-[#e0e0db] rounded-lg shadow-xl py-2 z-50">
@@ -173,10 +172,10 @@ function App() {
               </div>
             )}
           </div>
-          
+
           <div className="flex items-center gap-4">
             <div className="relative" ref={notifRef}>
-              <div 
+              <div
                 onClick={handleToggleNotif}
                 className="w-8 h-8 border border-[#d0d0cc] rounded-md flex items-center justify-center bg-white cursor-pointer hover:bg-gray-50 transition-colors relative"
               >
@@ -212,7 +211,7 @@ function App() {
             <div className="h-5 w-[1px] bg-[#d0d0cc]"></div>
 
             <div className="relative" ref={profileRef}>
-              <div 
+              <div
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
                 className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 pr-2 rounded-md transition-colors"
               >
@@ -230,7 +229,7 @@ function App() {
                     <p className="text-[11px] text-[#666] truncate">{currentUser?.email}</p>
                     <p className="text-[10px] text-[#2d7a50] mt-1.5 font-black uppercase tracking-widest">{currentUser?.role}</p>
                   </div>
-                  <button 
+                  <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2.5 text-[12px] text-[#c0392b] font-medium hover:bg-[#fce8e8] transition-colors flex items-center gap-2"
                   >
