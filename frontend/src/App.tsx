@@ -15,19 +15,23 @@ import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Dictionaries from './pages/Dictionaries';
 
+import type { AuthUser, AlertNotification } from './types';
+
 type PageType = 'dashboard' | 'purchases' | 'inventory' | 'fields' | 'applications' | 'analytics' | 'dictionaries';
 
 function App() {
   const [activePage, setActivePage] = useState<PageType>('dashboard');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  
+  // ТЕПЕР TS ЗНАЄ, ЯКІ ПОЛЯ Є У КОРИСТУВАЧА
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null); 
+  const [notifications, setNotifications] = useState<AlertNotification[]>([]);
 
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false); // Стан для червоної крапки
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
 
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);

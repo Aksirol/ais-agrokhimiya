@@ -1,33 +1,36 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../lib/prisma');
 const { authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
 
 // GET /api/analytics/dashboard - Отримати реальні дані для графіків
 router.get('/dashboard', authorizeRoles('admin', 'agronomist'), async (req, res) => {
   try {
-    // 1. Отримуємо всі необхідні дані з бази
-    const purchases = await prisma.purchaseOrder.findMany({
-      include: { supplier: true, orderItems: { include: { chemical: true } } }
-    });
-    
-    const fields = await prisma.field.findMany({
-      include: { applications: true }
-    });
-    
-    const applications = await prisma.application.findMany({
-      include: { field: true }
-    });
+    const currentYear = new Date().getFullYear();
 
-    // --- KPI 1: Загальні витрати ---
-    const totalExpenses = purchases.reduce((sum, p) => sum + Number(p.total_amount), 0);
+    // 1. ОПТИМІЗАЦІЯ (СЕД-3): База даних сама рахує загальну суму
+    const totalExpensesResult = await prisma.purchaseOrder.aggregate({
+      _sum: { total_amount: true }
+    });
+    const totalExpenses = Number(totalExpensesResult._sum.total_amount || 0);
+
+    // Завантажуємо закупівлі ТІЛЬКИ за поточний рік для графіка
+    const currentYearPurchases = await prisma.purchaseOrder.findMany({
+      where: {
+        order_date: {
+          gte: new Date(`${currentYear}-01-01`),
+          lte: new Date(`${currentYear}-12-31`)
+        }
+      },
+      include: { orderItems: { include: { chemical: true } } }
+    });
 
     // --- KPI 2: Закуплено товарів (об'єм) ---
     let totalVolume = 0;
     const categoryExpenses = {}; // Для кругової діаграми
-    
+
     purchases.forEach(p => {
       p.orderItems.forEach(item => {
         totalVolume += Number(item.quantity);
@@ -43,13 +46,20 @@ router.get('/dashboard', authorizeRoles('admin', 'agronomist'), async (req, res)
     const expensePerHa = treatedArea > 0 ? Math.round(totalExpenses / treatedArea) : 0;
 
     // --- ГРАФІК 1: Закупівлі по місяцях (Січень - Червень для прикладу) ---
-    const monthlyData = [0, 0, 0, 0, 0, 0]; 
-    purchases.forEach(p => {
-      const month = p.order_date.getMonth(); // 0 = Січень
-      if (month >= 0 && month <= 5) {
-        monthlyData[month] += Number(p.total_amount);
-      }
+    const monthlyData = new Array(12).fill(0); // Створюємо масив з 12 нулів
+    
+    currentYearPurchases.forEach(p => {
+      const monthIndex = p.order_date.getMonth(); // 0 = Січень, 11 = Грудень
+      monthlyData[monthIndex] += Number(p.total_amount);
     });
+
+    // Відправляємо на фронтенд лише ті місяці, які вже настали (до поточного)
+    const currentMonthIndex = new Date().getMonth();
+    const relevantMonthlyData = monthlyData.slice(0, currentMonthIndex + 1);
+    
+    // Генеруємо назви місяців динамічно
+    const monthNames = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
+    const relevantMonthNames = monthNames.slice(0, currentMonthIndex + 1);
 
     // --- ГРАФІК 2: Витрати (використання) по полях ---
     const fieldUsage = {};
@@ -64,7 +74,7 @@ router.get('/dashboard', authorizeRoles('admin', 'agronomist'), async (req, res)
       const sname = p.supplier.name;
       supplierTotals[sname] = (supplierTotals[sname] || 0) + Number(p.total_amount);
     });
-    
+
     const topSuppliers = Object.entries(supplierTotals)
       .map(([name, total]) => ({ name, total }))
       .sort((a, b) => b.total - a.total)
@@ -115,7 +125,7 @@ router.get('/home', authorizeRoles('admin', 'agronomist', 'operator'), async (re
     // Витрати за категоріями (для смужок прогресу)
     const categoryExpenses = {};
     let totalExpenses = 0;
-    
+
     purchases.forEach(p => {
       p.orderItems.forEach(item => {
         const cat = item.chemical.category;
@@ -127,7 +137,7 @@ router.get('/home', authorizeRoles('admin', 'agronomist', 'operator'), async (re
 
     // 5. Розумні Сповіщення (Alerts)
     const alerts = [];
-    
+
     // - Сповіщення про критичні залишки (Червоні)
     lowStockItems.forEach(item => {
       alerts.push({

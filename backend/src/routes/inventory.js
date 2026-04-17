@@ -1,9 +1,9 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../lib/prisma');
 const { authorizeRoles } = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
 
 // 1. READ: Отримати список залишків (Доступно всім)
 router.get('/', authorizeRoles('admin', 'agronomist', 'operator'), async (req, res) => {

@@ -1,3 +1,19 @@
+export type Role = 'admin' | 'agronomist' | 'operator';
+
+export interface AuthUser {
+  id: number;
+  name: string;
+  email: string;
+  role: Role;
+}
+
+export interface AlertNotification {
+  id: string;
+  title: string;
+  subtitle: string;
+  color: string;
+}
+
 export interface Chemical {
   id: number;
   name: string;
