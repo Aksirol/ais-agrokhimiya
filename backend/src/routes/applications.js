@@ -131,6 +131,17 @@ router.delete('/:id', authorizeRoles('admin', 'agronomist'), async (req, res) =>
           where: { id: invItem.id },
           data: { quantity: Number(invItem.quantity) + Number(app.quantity_used) }
         });
+
+        // АУДИТ: Логуємо повернення (для симетрії з OUT)
+        await tx.inventoryMovement.create({
+          data: {
+            inventory_id: invItem.id,
+            type: 'RETURN',
+            quantity: Number(app.quantity_used),
+            source_application_id: app.id,
+            user_id: req.user.id
+          }
+        });
       }
 
       // Видаляємо сам запис
@@ -152,7 +163,7 @@ router.put('/:id/complete', authorizeRoles('admin', 'agronomist'), async (req, r
     // 1. Знаходимо запис
     const app = await prisma.application.findUnique({ where: { id: Number(id) } });
     if (!app) return res.status(404).json({ error: 'Запис не знайдено' });
-    if (app.status === 'Завершено') return res.status(400).json({ error: 'Цей запис вже завершено' });
+    if (app.status === 'COMPLETED') return res.status(400).json({ error: 'Цей запис вже завершено' });
 
     // 2. Перевірка прав (Агроном може завершувати тільки свої записи)
     if (req.user.role === 'agronomist' && app.user_id !== req.user.id) {
@@ -194,7 +205,7 @@ router.put('/:id/complete', authorizeRoles('admin', 'agronomist'), async (req, r
       return await tx.application.update({
         where: { id: Number(id) },
         data: {
-          status: 'Завершено',
+          status: 'COMPLETED',
           quantity_used: Number(app.quantity_used) - returnedNum // Віднімаємо повернуте
         },
         include: { chemical: true, field: true, user: true, warehouse: true }

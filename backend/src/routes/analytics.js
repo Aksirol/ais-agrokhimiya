@@ -24,14 +24,18 @@ router.get('/dashboard', authorizeRoles('admin', 'agronomist'), async (req, res)
           lte: new Date(`${currentYear}-12-31`)
         }
       },
-      include: { orderItems: { include: { chemical: true } } }
+      include: { supplier: true, orderItems: { include: { chemical: true } } }
     });
+
+    // Завантажуємо поля та роботи (потрібно для KPI та графіків)
+    const fields = await prisma.field.findMany({ include: { applications: true } });
+    const applications = await prisma.application.findMany({ include: { field: true } });
 
     // --- KPI 2: Закуплено товарів (об'єм) ---
     let totalVolume = 0;
     const categoryExpenses = {}; // Для кругової діаграми
 
-    purchases.forEach(p => {
+    currentYearPurchases.forEach(p => {
       p.orderItems.forEach(item => {
         totalVolume += Number(item.quantity);
         const cat = item.chemical.category;
@@ -70,7 +74,7 @@ router.get('/dashboard', authorizeRoles('admin', 'agronomist'), async (req, res)
 
     // --- ГРАФІК 3: Топ постачальники ---
     const supplierTotals = {};
-    purchases.forEach(p => {
+    currentYearPurchases.forEach(p => {
       const sname = p.supplier.name;
       supplierTotals[sname] = (supplierTotals[sname] || 0) + Number(p.total_amount);
     });
@@ -105,28 +109,34 @@ router.get('/home', authorizeRoles('admin', 'agronomist', 'operator'), async (re
     const lowStockCount = lowStockItems.length;
 
     // 2. Поля
-    const fields = await prisma.field.findMany({ include: { applications: true } });
-    const totalFieldsCount = fields.length;
-    const treatedFieldsCount = fields.filter(f => f.applications.length > 0).length;
+    const [totalFieldsCount, treatedFieldsCount] = await Promise.all([
+      prisma.field.count(),
+      prisma.field.count({ where: { applications: { some: {} } } })
+    ]);
 
     // 3. Використання
-    const applications = await prisma.application.findMany();
-    const chemicalsUsedTotal = applications.reduce((sum, app) => sum + Number(app.quantity_used), 0);
+    const chemicalsUsedAgg = await prisma.application.aggregate({
+      _sum: { quantity_used: true }
+    });
+    const chemicalsUsedTotal = Number(chemicalsUsedAgg._sum.quantity_used || 0);
 
     // 4. Закупівлі (Останні та Витрати)
-    const purchases = await prisma.purchaseOrder.findMany({
-      include: { supplier: true, orderItems: { include: { chemical: true } } },
-      orderBy: { order_date: 'desc' }
+    const purchasesTotalAgg = await prisma.purchaseOrder.aggregate({
+      _sum: { total_amount: true }
     });
+    const purchasesTotal = Number(purchasesTotalAgg._sum.total_amount || 0);
 
-    const purchasesTotal = purchases.reduce((sum, p) => sum + Number(p.total_amount), 0);
-    const recentPurchases = purchases.slice(0, 4); // Беремо 4 останні закупівлі
+    const recentPurchases = await prisma.purchaseOrder.findMany({
+      include: { supplier: true, orderItems: { include: { chemical: true } } },
+      orderBy: { order_date: 'desc' },
+      take: 4
+    });
 
     // Витрати за категоріями (для смужок прогресу)
     const categoryExpenses = {};
     let totalExpenses = 0;
 
-    purchases.forEach(p => {
+    recentPurchases.forEach(p => {
       p.orderItems.forEach(item => {
         const cat = item.chemical.category;
         const cost = Number(item.quantity) * Number(item.price_per_unit);
@@ -149,7 +159,12 @@ router.get('/home', authorizeRoles('admin', 'agronomist', 'operator'), async (re
     });
 
     // - Сповіщення про незавершені замовлення (Жовті)
-    const pendingOrders = purchases.filter(p => p.status === 'Очікує' || p.status === 'Замовлено');
+    const pendingOrders = await prisma.purchaseOrder.findMany({
+      where: { status: { in: ['PENDING', 'ORDERED'] } },
+      include: { supplier: true },
+      orderBy: { order_date: 'desc' },
+      take: 5
+    });
     pendingOrders.forEach(order => {
       alerts.push({
         id: `ord-${order.id}`,

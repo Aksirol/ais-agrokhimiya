@@ -9,7 +9,7 @@ export default function Purchases() {
 
   // --- СТАНИ ДЛЯ ФІЛЬТРАЦІЇ ТА СОРТУВАННЯ ---
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('Всі');
+  const [filterStatus, setFilterStatus] = useState('ALL');
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key: 'date', direction: 'desc' });
 
   // Дані для модального вікна
@@ -74,7 +74,7 @@ export default function Purchases() {
       const matchesSearch =
         order.supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.user.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = filterStatus === 'Всі' || order.status === filterStatus;
+      const matchesStatus = filterStatus === 'ALL' || order.status === filterStatus;
       return matchesSearch && matchesStatus;
     })
     // 2. Сортування
@@ -162,10 +162,10 @@ export default function Purchases() {
           onChange={(e) => setFilterStatus(e.target.value)}
           className="h-[34px] border border-[#d0d0cc] rounded-[8px] px-2.5 text-[13px] bg-white focus:outline-none focus:border-[#2d7a50]"
         >
-          <option value="Всі">Всі статуси</option>
-          <option value="Очікує">Очікує</option>
-          <option value="Замовлено">Замовлено</option>
-          <option value="Отримано">Отримано</option>
+          <option value="ALL">Всі статуси</option>
+          <option value="PENDING">Очікує</option>
+          <option value="ORDERED">Замовлено</option>
+          <option value="RECEIVED">Отримано</option>
         </select>
       </div>
 
@@ -254,13 +254,13 @@ export default function Purchases() {
 
               {/* Кнопки дій залежно від ролі та статусу */}
               <div className="mt-4 flex flex-col gap-2 pt-3 border-t border-[#f0f0ee]">
-                {canApprove && selectedOrder.status === 'Очікує' && (
-                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'Замовлено')} className="w-full h-[30px] bg-[#e6f1fb] text-[#0c447c] rounded-[7px] text-[12px] font-medium hover:bg-blue-100">
+                {canApprove && selectedOrder.status === 'PENDING' && (
+                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'ORDERED')} className="w-full h-[30px] bg-[#e6f1fb] text-[#0c447c] rounded-[7px] text-[12px] font-medium hover:bg-blue-100">
                     Затвердити (Замовити)
                   </button>
                 )}
-                {canReceive && selectedOrder.status === 'Замовлено' && (
-                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'Отримано')} className="w-full h-[30px] bg-[#d1f0e0] text-[#1e5c36] rounded-[7px] text-[12px] font-medium hover:bg-green-200">
+                {canReceive && selectedOrder.status === 'ORDERED' && (
+                  <button onClick={() => handleUpdateStatus(selectedOrder.id, 'RECEIVED')} className="w-full h-[30px] bg-[#d1f0e0] text-[#1e5c36] rounded-[7px] text-[12px] font-medium hover:bg-green-200">
                     Прийняти на склад
                   </button>
                 )}

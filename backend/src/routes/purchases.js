@@ -63,7 +63,10 @@ router.post('/', authorizeRoles('admin', 'agronomist'), async (req, res) => {
       }
     });
     res.status(201).json(newOrder);
-  } catch (error) { /* обробка помилки */ }
+  } catch (error) {
+    console.error('Помилка створення замовлення:', error);
+    res.status(500).json({ error: 'Помилка сервера' });
+  }
 });
 
 // 4. Змінити статус замовлення (Адмін затверджує, Оператор приймає)
@@ -130,7 +133,7 @@ router.put('/:id/status', authorizeRoles('admin', 'operator'), async (req, res) 
           });
         }
       });
-      return res.json({ message: 'Отримано' });
+      return res.json({ message: 'RECEIVED' });
     }
 
     // Для інших статусів
@@ -139,7 +142,10 @@ router.put('/:id/status', authorizeRoles('admin', 'operator'), async (req, res) 
       data: { status }
     });
     res.json(updatedOrder);
-  } catch (error) { /* обробка помилки */ }
+  } catch (error) {
+    console.error('Помилка оновлення статусу замовлення:', error);
+    res.status(500).json({ error: 'Помилка сервера' });
+  }
 });
 
 // 5. Видалити замовлення (Тільки Адмін)
@@ -156,7 +162,10 @@ router.delete('/:id', authorizeRoles('admin'), async (req, res) => {
     await prisma.purchaseOrderItem.deleteMany({ where: { order_id: Number(id) } });
     await prisma.purchaseOrder.delete({ where: { id: Number(id) } });
     res.json({ message: 'Замовлення видалено' });
-  } catch (error) { /* обробка помилки */ }
+  } catch (error) {
+    console.error('Помилка видалення замовлення:', error);
+    res.status(500).json({ error: 'Помилка сервера' });
+  }
 });
 
 module.exports = router;

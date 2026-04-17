@@ -30,8 +30,8 @@ export default function Dashboard() {
   };
 
   const getStatusBadge = (status: string) => {
-    if (status === 'Отримано') return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#d1f0e0] text-[#1e5c36]">Отримано</span>;
-    if (status === 'Замовлено') return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#e6f1fb] text-[#0c447c]">Замовлено</span>;
+    if (status === 'RECEIVED') return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#d1f0e0] text-[#1e5c36]">Отримано</span>;
+    if (status === 'ORDERED') return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#e6f1fb] text-[#0c447c]">Замовлено</span>;
     return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#fde8c0] text-[#7a4a10]">Очікує</span>;
   };
 
