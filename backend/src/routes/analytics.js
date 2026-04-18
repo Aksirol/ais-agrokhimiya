@@ -88,7 +88,8 @@ router.get('/dashboard', authorizeRoles('admin', 'agronomist'), async (req, res)
     res.json({
       kpis: { totalExpenses, totalVolume, totalArea, treatedArea, expensePerHa },
       categoryExpenses,
-      monthlyData,
+      monthlyData: relevantMonthlyData, // Відправляємо тільки до поточного місяця
+      monthNames: relevantMonthNames,   // Відправляємо назви місяців для осі X
       fieldUsage,
       topSuppliers
     });

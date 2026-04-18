@@ -70,6 +70,8 @@ router.put('/:id', authorizeRoles('admin', 'operator'), async (req, res) => {
     const { id } = req.params;
     const { quantity, min_threshold } = req.body;
 
+    if (Number(quantity) < 0 || Number(min_threshold) < 0) return res.status(400).json({ error: 'Значення не може бути від\'ємним' });
+
     const updatedItem = await prisma.inventory.update({
       where: { id: Number(id) },
       data: { 

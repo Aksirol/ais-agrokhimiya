@@ -120,7 +120,7 @@ export default function Applications() {
         >
           <option value="Всі">Всі статуси</option>
           <option value="IN_PROGRESS">В процесі (Активні)</option>
-          <option value="COMPLETED">COMPLETED</option>
+          <option value="COMPLETED">Завершено</option>
         </select>
       </div>
 
@@ -184,7 +184,7 @@ export default function Applications() {
           {selectedApp ? (
             <>
               {/* Оновлене відображення статусу в деталях */}
-              <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">Статус</span><span className="text-[12px] font-medium text-[#1a1a18]">{selectedApp.status === 'COMPLETED' ? 'COMPLETED' : 'В процесі'}</span></div>
+              <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">Статус</span><span className="text-[12px] font-medium text-[#1a1a18]">{selectedApp.status === 'COMPLETED' ? 'Завершено' : 'В процесі'}</span></div>
               <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">Хімікат</span><span className="text-[12px] font-medium text-[#1a1a18] truncate w-28 text-right">{selectedApp.chemical.name}</span></div>
               <div className="flex justify-between gap-2 mb-2"><span className="text-[12px] text-[#888]">Поле</span><span className="text-[12px] font-medium text-[#1a1a18] text-right">{selectedApp.field.name}</span></div>
               {/* Оновлена перевірка статусу */}

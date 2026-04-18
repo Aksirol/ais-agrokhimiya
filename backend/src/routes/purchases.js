@@ -35,14 +35,25 @@ router.get('/form-data', authorizeRoles('admin', 'agronomist'), async (req, res)
 });
 
 // 3. Створити нове замовлення (Адмін та Агроном)
+// 3. Створити нове замовлення
 router.post('/', authorizeRoles('admin', 'agronomist'), async (req, res) => {
   try {
-    // ПРИБРАНО total_amount з деструктуризації — ми не довіряємо фронтенду!
     const { supplier_id, chemical_id, quantity, price_per_unit } = req.body;
     
-    // БЕЗПЕКА: Сервер сам рахує суму
+    if (Number(quantity) <= 0 || Number(price_per_unit) <= 0) {
+      return res.status(400).json({ error: 'Кількість та ціна мають бути більшими за нуль' });
+    }
+
+    // НОВЕ: Отримуємо дані про хімікат з бази
+    const chemical = await prisma.chemical.findUnique({
+      where: { id: Number(chemical_id) }
+    });
+
+    if (!chemical) {
+      return res.status(404).json({ error: 'Хімікат не знайдено' });
+    }
+
     const calculatedTotal = Number(quantity) * Number(price_per_unit);
-    // Використовуємо нові ENUM статуси
     const initialStatus = req.user.role === 'admin' ? 'ORDERED' : 'PENDING';
 
     const newOrder = await prisma.purchaseOrder.create({
@@ -50,13 +61,14 @@ router.post('/', authorizeRoles('admin', 'agronomist'), async (req, res) => {
         supplier_id: Number(supplier_id),
         user_id: req.user.id,
         order_date: new Date(),
-        total_amount: calculatedTotal, // Зберігаємо безпечну суму
+        total_amount: calculatedTotal,
         status: initialStatus,
         orderItems: {
           create: [{
             chemical_id: Number(chemical_id),
             quantity: Number(quantity),
-            purchase_unit: 'шт/кг/л',
+            // НОВЕ: Беремо реальну одиницю виміру з хімікату!
+            purchase_unit: chemical.purchase_unit || chemical.base_unit || 'од.', 
             price_per_unit: Number(price_per_unit)
           }]
         }

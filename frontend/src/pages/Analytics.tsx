@@ -30,7 +30,8 @@ export default function Analytics() {
 
   // --- МАТЕМАТИКА ДЛЯ ГРАФІКІВ (Пошук максимумів) ---
   const maxMonthValue = Math.max(...data.monthlyData, 1); // Щоб уникнути ділення на 0
-  const monthNames = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер'];
+// Беремо назви місяців з бекенду, або використовуємо дефолтні, якщо їх немає
+  const monthNames = data.monthNames || ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер'];
 
   const fieldEntries = Object.entries(data.fieldUsage).map(([name, val]) => ({ name, value: Number(val) })).slice(0, 4);
   const maxFieldValue = Math.max(...fieldEntries.map(f => f.value), 1);

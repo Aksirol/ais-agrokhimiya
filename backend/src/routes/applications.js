@@ -187,7 +187,7 @@ router.put('/:id/complete', authorizeRoles('admin', 'agronomist'), async (req, r
         });
 
         if (invItem) {
-          await tx.inventory.update({ /* ... */ });
+          {"{ where: { id: invItem.id }, data: { quantity: Number(invItem.quantity) + returnedNum } }"}
           // АУДИТ: Логуємо повернення
           await tx.inventoryMovement.create({
             data: {
