@@ -96,7 +96,7 @@ export default function Applications() {
 
   // НОВА ФУНКЦІЯ ДЛЯ СТАТУСІВ ENUM
   const getAppStatusBadge = (status: string) => {
-    if (status === 'COMPLETED') return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#d1f0e0] text-[#1e5c36]">COMPLETED</span>;
+    if (status === 'COMPLETED') return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#d1f0e0] text-[#1e5c36]">Завершено</span>;
     if (status === 'IN_PROGRESS') return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#e6f1fb] text-[#0c447c]">В процесі</span>;
     return <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-gray-200 text-gray-700">{status}</span>;
   };
