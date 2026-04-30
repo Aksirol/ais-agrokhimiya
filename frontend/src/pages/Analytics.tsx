@@ -6,34 +6,59 @@ export default function Analytics() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // Функція для перетворення назви вкладки у формат, який розуміє бекенд
+  const getPeriodParam = (tab: string) => {
+    switch (tab) {
+      case 'Місяць': return 'month';
+      case 'Квартал': return 'quarter';
+      case 'Рік': return 'year';
+      case 'Всі дані': return 'all';
+      default: return 'all';
+    }
+  };
+
   useEffect(() => {
-    axios.get('/api/analytics/dashboard')
+    setLoading(true); // Включаємо завантаження при зміні вкладки
+    const token = localStorage.getItem('agro_token');
+    const period = getPeriodParam(activeTab);
+
+    // Додаємо параметр period до запиту
+    axios.get(`/api/analytics/dashboard?period=${period}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
       .then(res => {
         setData(res.data);
         setLoading(false);
       })
-      .catch(err => console.error('Помилка завантаження аналітики:', err));
-  }, []);
+      .catch(err => {
+        console.error('Помилка завантаження аналітики:', err);
+        setLoading(false);
+      });
+  }, [activeTab]); // useEffect спрацює знову, коли activeTab зміниться
 
-  if (loading || !data) {
+  if (loading && !data) {
     return <div className="p-5 text-gray-500">Завантаження аналітики...</div>;
   }
 
+  if (!data) return null; // Захист, якщо дані ще не прийшли
+
   // --- МАТЕМАТИКА ДЛЯ КРУГОВОЇ ДІАГРАМИ (Категорії) ---
-  const categories = Object.entries(data.categoryExpenses).map(([name, val]) => ({ name, value: Number(val) }));
+  const categories = Object.entries(data.categoryExpenses || {}).map(([name, val]) => ({ name, value: Number(val) }));
   const totalCategorySum = categories.reduce((acc, curr) => acc + curr.value, 0) || 1;
   const colors = ['#2d7a50', '#6ab88e', '#3b9e6a', '#c5e8c5'];
   
   const radius = 14;
-  const circumference = 2 * Math.PI * radius; // Довжина кола
+  const circumference = 2 * Math.PI * radius; 
   let cumulativePercent = 0;
 
   // --- МАТЕМАТИКА ДЛЯ ГРАФІКІВ (Пошук максимумів) ---
-  const maxMonthValue = Math.max(...data.monthlyData, 1); // Щоб уникнути ділення на 0
-// Беремо назви місяців з бекенду, або використовуємо дефолтні, якщо їх немає
-  const monthNames = data.monthNames || ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер'];
+  const monthlyDataArray = data.monthlyData || [];
+  const maxMonthValue = Math.max(...monthlyDataArray, 1); 
+  
+  // Беремо назви місяців з бекенду (важливо, бо їхня кількість може змінюватись)
+  const monthNames = data.monthNames || ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
 
-  const fieldEntries = Object.entries(data.fieldUsage).map(([name, val]) => ({ name, value: Number(val) })).slice(0, 4);
+  const fieldEntries = Object.entries(data.fieldUsage || {}).map(([name, val]) => ({ name, value: Number(val) })).slice(0, 4);
   const maxFieldValue = Math.max(...fieldEntries.map(f => f.value), 1);
 
   return (
@@ -57,24 +82,26 @@ export default function Analytics() {
         ))}
       </div>
 
+      {loading && <div className="text-[12px] text-gray-500 mb-2">Оновлення даних...</div>}
+
       {/* Метрики (KPIs) */}
       <div className="grid grid-cols-4 gap-2.5 mb-3.5">
         <div className="bg-white border border-[#e0e0db] rounded-[10px] p-3.5">
           <div className="text-[11px] text-[#888] mb-1.5">Загальні витрати</div>
-          <div className="text-[20px] font-medium text-[#1a1a18]">{data.kpis.totalExpenses.toLocaleString()} грн</div>
+          <div className="text-[20px] font-medium text-[#1a1a18]">{data.kpis?.totalExpenses?.toLocaleString() || 0} грн</div>
         </div>
         <div className="bg-white border border-[#e0e0db] rounded-[10px] p-3.5">
           <div className="text-[11px] text-[#888] mb-1.5">Закуплено товарів</div>
-          <div className="text-[20px] font-medium text-[#1a1a18]">{data.kpis.totalVolume.toLocaleString()} кг/л</div>
+          <div className="text-[20px] font-medium text-[#1a1a18]">{data.kpis?.totalVolume?.toLocaleString() || 0} кг/л</div>
         </div>
         <div className="bg-white border border-[#e0e0db] rounded-[10px] p-3.5">
           <div className="text-[11px] text-[#888] mb-1.5">Оброблено площі</div>
-          <div className="text-[20px] font-medium text-[#1a1a18]">{data.kpis.treatedArea} га</div>
-          <div className="text-[11px] mt-1 text-[#888]">з {data.kpis.totalArea} га загалом</div>
+          <div className="text-[20px] font-medium text-[#1a1a18]">{data.kpis?.treatedArea || 0} га</div>
+          <div className="text-[11px] mt-1 text-[#888]">з {data.kpis?.totalArea || 0} га загалом</div>
         </div>
         <div className="bg-white border border-[#e0e0db] rounded-[10px] p-3.5">
           <div className="text-[11px] text-[#888] mb-1.5">Витрати на га</div>
-          <div className="text-[20px] font-medium text-[#1a1a18]">{data.kpis.expensePerHa.toLocaleString()} грн</div>
+          <div className="text-[20px] font-medium text-[#1a1a18]">{data.kpis?.expensePerHa?.toLocaleString() || 0} грн</div>
         </div>
       </div>
 
@@ -82,22 +109,28 @@ export default function Analytics() {
       <div className="grid grid-cols-2 gap-3 mb-3">
         
         {/* Закупівлі по місяцях (Стовпчики) */}
-        <div className="bg-white border border-[#e0e0db] rounded-[10px] p-3.5 flex flex-col">
+        <div className="bg-white border border-[#e0e0db] rounded-[10px] p-3.5 flex flex-col h-full">
           <div className="text-[13px] font-medium text-[#1a1a18] mb-3">Закупівлі по місяцях (грн)</div>
-          <div className="flex items-end gap-2 h-[100px] mt-auto">
-            {data.monthlyData.map((val: number, idx: number) => {
-              const heightPercent = val === 0 ? 2 : (val / maxMonthValue) * 100;
+          
+          {/* Збільшили висоту контейнера зі 100px до 110px і додали відступ зверху pt-2 */}
+          <div className="flex items-end gap-2 h-[110px] mt-auto pt-2">
+            {monthlyDataArray.length > 0 ? monthlyDataArray.map((val: number, idx: number) => {
+              
+              // ГОЛОВНЕ ВИПРАВЛЕННЯ: Тепер максимальна висота стовпчика - 75px замість 100
+              const barHeight = val === 0 ? 2 : (val / maxMonthValue) * 75; 
+              
               return (
                 <div key={idx} className="flex flex-col items-center gap-1 flex-1">
                   <span className="text-[9px] text-[#555]">{val > 0 ? `${(val/1000).toFixed(1)}к` : '—'}</span>
                   <div 
                     className="w-full rounded-t-[4px] transition-all duration-500" 
-                    style={{ height: `${heightPercent}px`, backgroundColor: val > 0 ? '#6ab88e' : '#e0e0db' }}
+                    // Використовуємо нашу нову розраховану висоту
+                    style={{ height: `${barHeight}px`, backgroundColor: val > 0 ? '#6ab88e' : '#e0e0db' }}
                   ></div>
-                  <span className="text-[10px] text-[#aaa]">{monthNames[idx]}</span>
+                  <span className="text-[10px] text-[#aaa]">{monthNames[idx] || ''}</span>
                 </div>
               );
-            })}
+            }) : <div className="text-[12px] text-gray-400 m-auto">Немає даних за цей період</div>}
           </div>
         </div>
 
@@ -168,7 +201,7 @@ export default function Analytics() {
         <div className="bg-white border border-[#e0e0db] rounded-[10px] p-3.5">
           <div className="text-[13px] font-medium text-[#1a1a18] mb-1">Топ постачальники (витрати)</div>
           <div className="flex flex-col">
-            {data.topSuppliers.length > 0 ? data.topSuppliers.map((sup: any, idx: number) => (
+            {data.topSuppliers?.length > 0 ? data.topSuppliers.map((sup: any, idx: number) => (
               <div key={sup.name} className={`flex justify-between items-center py-2 ${idx !== data.topSuppliers.length -1 ? 'border-b border-[#f4f4f2]' : ''}`}>
                 <span className="text-[13px] text-[#1a1a18]">{sup.name}</span>
                 <span className="text-[13px] font-medium text-[#1a1a18]">{sup.total.toLocaleString()} грн</span>
@@ -178,17 +211,6 @@ export default function Analytics() {
         </div>
 
       </div>
-
-      {/* Кнопки експорту (Заглушки для вигляду) */}
-      <div className="flex gap-2 justify-end mt-4">
-        <button onClick={() => window.print()} className="h-[32px] px-3.5 border border-[#d0d0cc] rounded-[7px] text-[12px] bg-white text-[#1a1a18] flex items-center gap-1.5 hover:bg-gray-50 transition-colors">
-          <svg width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Друк / PDF
-        </button>
-      </div>
-
     </div>
   );
 }

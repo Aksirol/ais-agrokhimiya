@@ -13,14 +13,21 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # НОВЕ: Вчимо Docker перевіряти, чи база дійсно завантажилася
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agro_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
     container_name: agro_backend
     restart: always
     depends_on:
-      - db
-    # Вказуємо шлях до нашого файлу з секретами
+      db:
+        # НОВЕ: Бекенд чекатиме, поки база не стане повністю "здоровою" (готовою)
+        condition: service_healthy
     env_file:
       - ./backend/.env
     environment:
@@ -33,10 +40,11 @@ services:
     container_name: agro_frontend
     restart: always
     depends_on:
-      - backend
+      backend:
+        # Фронтенд чекатиме на успішний запуск бекенду
+        condition: service_started
     ports:
       - "80:80"
 
-# Обов'язковий блок, який випадково видалився (реєстрація тому)
 volumes:
   postgres_data:

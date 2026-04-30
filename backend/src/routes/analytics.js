@@ -1,41 +1,61 @@
 const express = require('express');
-const prisma = require('../lib/prisma');
-const { authorizeRoles } = require('../middleware/auth');
-
 const router = express.Router();
+const { authorizeRoles } = require('../middleware/auth');
+const prisma = require('../lib/prisma');
 
-
-// GET /api/analytics/dashboard - Отримати реальні дані для графіків
+// 1. МАРШРУТ ДЛЯ СТОРІНКИ "АНАЛІТИКА" (з фільтрами періодів)
 router.get('/dashboard', authorizeRoles('admin', 'agronomist'), async (req, res) => {
   try {
-    const currentYear = new Date().getFullYear();
+    const { period = 'year' } = req.query;
+    const now = new Date();
+    let startDate, endDate;
 
-    // 1. ОПТИМІЗАЦІЯ (СЕД-3): База даних сама рахує загальну суму
+    // Визначаємо дати початку і кінця для фільтру
+    if (period === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    } else if (period === 'quarter') {
+      const currentQuarter = Math.floor(now.getMonth() / 3);
+      startDate = new Date(now.getFullYear(), currentQuarter * 3, 1);
+      endDate = new Date(now.getFullYear(), currentQuarter * 3 + 3, 0);
+    } else if (period === 'all') {
+      startDate = new Date(2000, 0, 1);
+      endDate = new Date(2100, 0, 1);
+    } else {
+      // За замовчуванням - поточний рік
+      startDate = new Date(now.getFullYear(), 0, 1);
+      endDate = new Date(now.getFullYear(), 11, 31);
+    }
+
+    const dateFilter = { gte: startDate, lte: endDate };
+
+    // Розраховуємо загальну суму витрат
     const totalExpensesResult = await prisma.purchaseOrder.aggregate({
-      _sum: { total_amount: true }
+      _sum: { total_amount: true },
+      where: { order_date: dateFilter }
     });
     const totalExpenses = Number(totalExpensesResult._sum.total_amount || 0);
 
-    // Завантажуємо закупівлі ТІЛЬКИ за поточний рік для графіка
-    const currentYearPurchases = await prisma.purchaseOrder.findMany({
-      where: {
-        order_date: {
-          gte: new Date(`${currentYear}-01-01`),
-          lte: new Date(`${currentYear}-12-31`)
-        }
-      },
+    // Отримуємо відфільтровані закупівлі
+    const filteredPurchases = await prisma.purchaseOrder.findMany({
+      where: { order_date: dateFilter },
       include: { supplier: true, orderItems: { include: { chemical: true } } }
     });
 
-    // Завантажуємо поля та роботи (потрібно для KPI та графіків)
-    const fields = await prisma.field.findMany({ include: { applications: true } });
-    const applications = await prisma.application.findMany({ include: { field: true } });
+    const fields = await prisma.field.findMany({
+      include: { applications: true }
+    });
 
-    // --- KPI 2: Закуплено товарів (об'єм) ---
+    // Отримуємо відфільтровані використання (списання)
+    const applications = await prisma.application.findMany({
+      where: { applied_date: dateFilter },
+      include: { field: true }
+    });
+
     let totalVolume = 0;
-    const categoryExpenses = {}; // Для кругової діаграми
+    const categoryExpenses = {};
 
-    currentYearPurchases.forEach(p => {
+    filteredPurchases.forEach(p => {
       p.orderItems.forEach(item => {
         totalVolume += Number(item.quantity);
         const cat = item.chemical.category;
@@ -44,37 +64,25 @@ router.get('/dashboard', authorizeRoles('admin', 'agronomist'), async (req, res)
       });
     });
 
-    // --- KPI 3 & 4: Площі та витрати на гектар ---
     const totalArea = fields.reduce((sum, f) => sum + Number(f.area_ha), 0);
     const treatedArea = fields.filter(f => f.applications.length > 0).reduce((sum, f) => sum + Number(f.area_ha), 0);
     const expensePerHa = treatedArea > 0 ? Math.round(totalExpenses / treatedArea) : 0;
 
-    // --- ГРАФІК 1: Закупівлі по місяцях (Січень - Червень для прикладу) ---
-    const monthlyData = new Array(12).fill(0); // Створюємо масив з 12 нулів
-    
-    currentYearPurchases.forEach(p => {
-      const monthIndex = p.order_date.getMonth(); // 0 = Січень, 11 = Грудень
-      monthlyData[monthIndex] += Number(p.total_amount);
+    // Графік по місяцях
+    const relevantMonthlyData = new Array(12).fill(0);
+    filteredPurchases.forEach(p => {
+      const monthIndex = p.order_date.getMonth();
+      relevantMonthlyData[monthIndex] += Number(p.total_amount);
     });
 
-    // Відправляємо на фронтенд лише ті місяці, які вже настали (до поточного)
-    const currentMonthIndex = new Date().getMonth();
-    const relevantMonthlyData = monthlyData.slice(0, currentMonthIndex + 1);
-    
-    // Генеруємо назви місяців динамічно
-    const monthNames = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
-    const relevantMonthNames = monthNames.slice(0, currentMonthIndex + 1);
-
-    // --- ГРАФІК 2: Витрати (використання) по полях ---
     const fieldUsage = {};
     applications.forEach(app => {
       const fname = app.field.name;
       fieldUsage[fname] = (fieldUsage[fname] || 0) + Number(app.quantity_used);
     });
 
-    // --- ГРАФІК 3: Топ постачальники ---
     const supplierTotals = {};
-    currentYearPurchases.forEach(p => {
+    filteredPurchases.forEach(p => {
       const sname = p.supplier.name;
       supplierTotals[sname] = (supplierTotals[sname] || 0) + Number(p.total_amount);
     });
@@ -82,116 +90,110 @@ router.get('/dashboard', authorizeRoles('admin', 'agronomist'), async (req, res)
     const topSuppliers = Object.entries(supplierTotals)
       .map(([name, total]) => ({ name, total }))
       .sort((a, b) => b.total - a.total)
-      .slice(0, 4); // Беремо топ 4
+      .slice(0, 4);
 
-    // Відправляємо всі згруповані дані на фронтенд
+    const relevantMonthNames = ['Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
+
+    // Відправляємо дані на фронтенд
     res.json({
       kpis: { totalExpenses, totalVolume, totalArea, treatedArea, expensePerHa },
       categoryExpenses,
-      monthlyData: relevantMonthlyData, // Відправляємо тільки до поточного місяця
-      monthNames: relevantMonthNames,   // Відправляємо назви місяців для осі X
+      monthlyData: relevantMonthlyData,
+      monthNames: relevantMonthNames,
       fieldUsage,
       topSuppliers
     });
-
   } catch (error) {
     console.error('Помилка формування аналітики:', error);
     res.status(500).json({ error: 'Помилка сервера' });
   }
 });
 
-// GET /api/analytics/home - Зведені дані для Головного Дашборду (доступно всім)
+// 2. МАРШРУТ ДЛЯ ГОЛОВНОГО "ДАШБОРДУ" (Сповіщення та загальна статистика)
 router.get('/home', authorizeRoles('admin', 'agronomist', 'operator'), async (req, res) => {
   try {
-    // 1. Склад та Сповіщення про низький запас
+    // 1. Завантажуємо всі необхідні дані з бази
     const inventory = await prisma.inventory.findMany({ include: { chemical: true } });
-    const inventoryCount = inventory.length;
-    const lowStockItems = inventory.filter(item => Number(item.quantity) <= Number(item.min_threshold));
-    const lowStockCount = lowStockItems.length;
-
-    // 2. Поля
-    const [totalFieldsCount, treatedFieldsCount] = await Promise.all([
-      prisma.field.count(),
-      prisma.field.count({ where: { applications: { some: {} } } })
-    ]);
-
-    // 3. Використання
-    const chemicalsUsedAgg = await prisma.application.aggregate({
-      _sum: { quantity_used: true }
-    });
-    const chemicalsUsedTotal = Number(chemicalsUsedAgg._sum.quantity_used || 0);
-
-    // 4. Закупівлі (Останні та Витрати)
-    const purchasesTotalAgg = await prisma.purchaseOrder.aggregate({
-      _sum: { total_amount: true }
-    });
-    const purchasesTotal = Number(purchasesTotalAgg._sum.total_amount || 0);
-
-    const recentPurchases = await prisma.purchaseOrder.findMany({
+    const fields = await prisma.field.findMany({ include: { applications: true } });
+    const purchases = await prisma.purchaseOrder.findMany({
       include: { supplier: true, orderItems: { include: { chemical: true } } },
-      orderBy: { order_date: 'desc' },
-      take: 4
+      orderBy: { order_date: 'desc' } // Сортуємо від найновіших до найстаріших
     });
+    const applications = await prisma.application.findMany();
 
-    // Витрати за категоріями (для смужок прогресу)
-    const categoryExpenses = {};
+    // 2. Розраховуємо фінанси та об'єми (для KPI та графіка категорій)
     let totalExpenses = 0;
+    const categoryExpenses = {};
 
-    recentPurchases.forEach(p => {
+    purchases.forEach(p => {
+      totalExpenses += Number(p.total_amount);
+      
       p.orderItems.forEach(item => {
+        // Додаємо витрати до відповідної категорії
         const cat = item.chemical.category;
         const cost = Number(item.quantity) * Number(item.price_per_unit);
         categoryExpenses[cat] = (categoryExpenses[cat] || 0) + cost;
-        totalExpenses += cost;
       });
     });
 
-    // 5. Розумні Сповіщення (Alerts)
+    // 3. Розраховуємо використання хімікатів
+    let chemicalsUsedTotal = 0;
+    applications.forEach(app => {
+      chemicalsUsedTotal += Number(app.quantity_used);
+    });
+
+    // 4. Рахуємо статистику по складу (позиції та дефіцит)
+    const inventoryCount = inventory.length;
+    const lowStockCount = inventory.filter(item => Number(item.quantity) <= Number(item.min_threshold)).length;
+
+    // 5. Рахуємо статистику по полях
+    const totalFieldsCount = fields.length;
+    const treatedFieldsCount = fields.filter(f => f.applications.length > 0).length;
+
+    // 6. Формуємо масив останніх закупівель (беремо перші 5)
+    const recentPurchases = purchases.slice(0, 5);
+
+    // 7. Генеруємо сповіщення
     const alerts = [];
 
-    // - Сповіщення про критичні залишки (Червоні)
-    lowStockItems.forEach(item => {
-      alerts.push({
-        id: `inv-${item.id}`,
-        title: `${item.chemical.name} — залишок ${Number(item.quantity)} ${item.chemical.base_unit}`,
-        subtitle: `Мінімальний поріг: ${Number(item.min_threshold)} ${item.chemical.base_unit}`,
-        color: 'bg-[#e24b4a]' // Червоний
+    // Сповіщення: запаси нижче норми
+    inventory.filter(item => Number(item.quantity) <= Number(item.min_threshold)).forEach(item => {
+      alerts.push({ 
+        id: `inv-${item.id}`, 
+        title: `${item.chemical.name} — залишок ${Number(item.quantity)}`, 
+        subtitle: `Мін: ${Number(item.min_threshold)}`, 
+        color: 'bg-[#e24b4a]' 
       });
     });
 
-    // - Сповіщення про незавершені замовлення (Жовті)
-    const pendingOrders = await prisma.purchaseOrder.findMany({
-      where: { status: { in: ['PENDING', 'ORDERED'] } },
-      include: { supplier: true },
-      orderBy: { order_date: 'desc' },
-      take: 5
-    });
+    // Сповіщення: відкриті замовлення
+    const pendingOrders = purchases.filter(p => p.status === 'PENDING' || p.status === 'ORDERED');
     pendingOrders.forEach(order => {
       alerts.push({
         id: `ord-${order.id}`,
         title: `Замовлення №${order.id} на суму ${Number(order.total_amount).toLocaleString()} грн`,
-        subtitle: `${order.supplier.name} · Статус: ${order.status}`,
-        color: 'bg-[#ef9f27]' // Жовтий
+        subtitle: `${order.supplier.name} · Статус: ${order.status === 'PENDING' ? 'Очікує' : 'Замовлено'}`,
+        color: 'bg-[#ef9f27]'
       });
     });
 
+    // 8. Відправляємо ВСІ дані, які очікує фронтенд
     res.json({
-      kpis: {
-        purchasesTotal,
+      kpis: { 
+        purchasesTotal: totalExpenses, 
+        chemicalsUsedTotal,
         inventoryCount,
         lowStockCount,
         treatedFieldsCount,
-        totalFieldsCount,
-        chemicalsUsedTotal
+        totalFieldsCount
       },
       categoryExpenses,
-      totalExpenses: totalExpenses || 1, // Щоб уникнути ділення на нуль
+      totalExpenses,
       recentPurchases,
-      alerts: alerts.slice(0, 5) // Показуємо тільки топ 5 найважливіших сповіщень
+      alerts
     });
-
   } catch (error) {
-    console.error('Помилка формування дашборду:', error);
+    console.error(error); 
     res.status(500).json({ error: 'Помилка сервера' });
   }
 });
